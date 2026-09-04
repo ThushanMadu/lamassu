@@ -1,0 +1,105 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Fast feedback: types, unit tests and a build on every supported platform.
+  test:
+    name: test (${{ matrix.os }}, node ${{ matrix.node }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        node: [20, 22, 24]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+
+  # The claim "works with npm, Yarn 1-4, pnpm and Bun" is earned here, not in
+  # the unit tests. Each package manager audits a deliberately vulnerable
+  # project for real, so a format change upstream fails CI instead of silently
+  # reaching users. This is exactly the failure mode that broke audit-ci.
+  verify:
+    name: verify ${{ matrix.pm }}
+    runs-on: ubuntu-latest
+    needs: test
+    strategy:
+      fail-fast: false
+      matrix:
+        pm: [npm, yarn1, yarn4, pnpm, bun]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Enable Corepack
+        if: matrix.pm != 'bun'
+        run: corepack enable
+
+      - uses: oven-sh/setup-bun@v2
+        if: matrix.pm == 'bun'
+        with:
+          bun-version: latest
+
+      - run: npm ci
+      - run: npm run build
+
+      - name: Verify ${{ matrix.pm }}
+        run: node scripts/verify-package-manager.mjs ${{ matrix.pm }}
+
+      - name: Upload normalised output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: verify-output-${{ matrix.pm }}
+          path: verify-output/
+          if-no-files-found: ignore
+
+  # Every package manager must reach the same verdict on the same project.
+  # If one of them starts disagreeing, normalisation has regressed.
+  cross-check:
+    name: all package managers agree
+    runs-on: ubuntu-latest
+    needs: verify
+    if: always()
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: verify-output-*
+          path: outputs
+          merge-multiple: true
+      - name: Compare advisory sets
+        run: node scripts/cross-check.mjs outputs
+
+  # A security tool should not ship with vulnerable dependencies of its own.
+  audit-self:
+    name: audit our own dependencies
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: node dist/cli.js --severity high

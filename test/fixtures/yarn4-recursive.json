@@ -1,0 +1,22 @@
+{
+  "lodash": [
+    {
+      "id": 1097130,
+      "url": "https://github.com/advisories/GHSA-35jh-r3h4-6jhm",
+      "title": "Command Injection in lodash",
+      "severity": "high",
+      "vulnerable_versions": "<4.17.21",
+      "tree_versions": ["4.17.15"]
+    }
+  ],
+  "minimist": [
+    {
+      "id": 1096466,
+      "url": "https://github.com/advisories/GHSA-vh95-rmgr-6w4m",
+      "title": "Prototype Pollution in minimist",
+      "severity": "moderate",
+      "vulnerable_versions": "<0.2.1",
+      "tree_versions": ["1.2.0"]
+    }
+  ]
+}

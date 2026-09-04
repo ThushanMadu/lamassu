@@ -1,0 +1,35 @@
+{
+  "name": "lamassu",
+  "version": "0.1.0",
+  "description": "Fail your CI build on vulnerable dependencies. Works with npm, Yarn 1-4, pnpm and Bun.",
+  "keywords": [
+    "audit", "security", "ci", "vulnerability", "dependencies",
+    "supply-chain", "npm", "yarn", "pnpm", "bun", "devsecops"
+  ],
+  "homepage": "https://github.com/ThushanMadu/lamassu#readme",
+  "bugs": "https://github.com/ThushanMadu/lamassu/issues",
+  "repository": { "type": "git", "url": "git+https://github.com/ThushanMadu/lamassu.git" },
+  "license": "MIT",
+  "author": "Thushan Madhusanka",
+  "type": "module",
+  "bin": { "lamassu": "./dist/cli.js" },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" }
+  },
+  "files": ["dist", "README.md", "LICENSE"],
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "prepublishOnly": "npm run typecheck && npm run test && npm run build"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0"
+  }
+}

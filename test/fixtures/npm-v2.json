@@ -1,0 +1,51 @@
+{
+  "auditReportVersion": 2,
+  "vulnerabilities": {
+    "lodash": {
+      "name": "lodash",
+      "severity": "high",
+      "isDirect": true,
+      "via": [
+        {
+          "source": 1097130,
+          "name": "lodash",
+          "dependency": "lodash",
+          "title": "Command Injection in lodash",
+          "url": "https://github.com/advisories/GHSA-35jh-r3h4-6jhm",
+          "severity": "high",
+          "cwe": ["CWE-77", "CWE-94"],
+          "range": "<4.17.21"
+        }
+      ],
+      "effects": [],
+      "range": "<=4.17.20",
+      "nodes": ["node_modules/lodash"],
+      "fixAvailable": true
+    },
+    "minimist": {
+      "name": "minimist",
+      "severity": "moderate",
+      "isDirect": true,
+      "via": [
+        {
+          "source": 1096466,
+          "name": "minimist",
+          "dependency": "minimist",
+          "title": "Prototype Pollution in minimist",
+          "url": "https://github.com/advisories/GHSA-vh95-rmgr-6w4m",
+          "severity": "moderate",
+          "cwe": ["CWE-1321"],
+          "range": "<0.2.1"
+        }
+      ],
+      "effects": [],
+      "range": "<0.2.1",
+      "nodes": ["node_modules/minimist"],
+      "fixAvailable": true
+    }
+  },
+  "metadata": {
+    "vulnerabilities": { "info": 0, "low": 0, "moderate": 1, "high": 1, "critical": 0, "total": 2 },
+    "dependencies": { "prod": 4, "dev": 0, "optional": 0, "peer": 0, "peerOptional": 0, "total": 4 }
+  }
+}
