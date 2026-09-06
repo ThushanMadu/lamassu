@@ -22,6 +22,24 @@ This project follows [Semantic Versioning](https://semver.org/).
 - **audit-ci compatibility mode**: an existing `audit-ci.json` / `.jsonc` is
   read and translated, so migrating is a one-line change.
 - Text and JSON reporters. Notices go to stderr so JSON on stdout stays valid.
+- `--timeout` / `timeoutSeconds` for slow registries. Also raises Yarn's own
+  60s network timeout to match, so one setting governs instead of two
+  disagreeing ones.
+- `LAMASSU_DUMP_RAW=<file>` writes the package manager's raw audit output, so a
+  new format can be reported without reconstructing the command by hand.
+- `LAMASSU_VERIFY_RAW=<file>` replays a captured run offline, for iterating on
+  the parser without hitting a throttling registry.
+- Parse failures now show what actually arrived, and distinguish "the package
+  manager errored" from "we do not know this format". A network timeout used to
+  be reported as an unrecognised format, sending people after a parser bug that
+  did not exist.
+- Findings are ordered most severe first. They were sorted by comparing severity
+  *strings*, which is alphabetical - moderate, low, high, critical - burying the
+  most dangerous finding at the bottom of the report.
+- A clean report now requires positive evidence of zero findings. Unrecognised
+  NDJSON was previously reported as a clean audit, which could hide every
+  vulnerability in a project while exiting 0.
+- Real Yarn 4.9.1 audit output committed as a test fixture (33 advisories).
 - Zero runtime dependencies.
 - CI matrix that audits a deliberately vulnerable project with every supported
   package manager, and cross-checks that they all reach the same verdict.

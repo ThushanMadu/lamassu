@@ -87,8 +87,17 @@ describe("exit codes", () => {
    * never look like a gate that passed.
    */
   describe("2, never 0, when the audit cannot be trusted", () => {
-    it("on unrecognisable audit output", async () => {
+    it("when the package manager printed an error instead of results", async () => {
       auditOutput.current = fixture("not-json.txt");
+      const { code, err } = await run(["-d", project()]);
+      expect(code).toBe(2);
+      expect(err).toMatch(/reported an error instead of audit results/);
+      // The user should see what the package manager actually said.
+      expect(err).toMatch(/ENETUNREACH/);
+    });
+
+    it("on output in a genuinely unknown format", async () => {
+      auditOutput.current = '{"some":"shape we do not know"}';
       const { code, err } = await run(["-d", project()]);
       expect(code).toBe(2);
       expect(err).toMatch(/could not recognise/);
@@ -122,6 +131,24 @@ describe("exit codes", () => {
     it("on an invalid severity", async () => {
       const { code } = await run(["--severity", "severe"]);
       expect(code).toBe(2);
+    });
+
+    it("on a non-numeric timeout", async () => {
+      const { code, err } = await run(["--timeout", "soon"]);
+      expect(code).toBe(2);
+      expect(err).toMatch(/positive number of seconds/);
+    });
+
+    it("on a zero or negative timeout", async () => {
+      expect((await run(["--timeout", "0"])).code).toBe(2);
+    });
+
+    it("on a timeout beyond Node's timer range", async () => {
+      // Larger than a 32-bit millisecond counter, which would make the timer
+      // fire immediately and kill the audit the instant it started.
+      const { code, err } = await run(["--timeout", "99999999999"]);
+      expect(code).toBe(2);
+      expect(err).toMatch(/at most/);
     });
 
     it("on a flag that is missing its value", async () => {

@@ -4,7 +4,7 @@ import { translateAuditCiConfig } from "./compat/audit-ci.js";
 import type { AllowlistEntry } from "./core/allowlist.js";
 import { parseEntry } from "./core/allowlist.js";
 import { parseThreshold, type Threshold } from "./core/threshold.js";
-import { SEVERITIES, type PackageManager } from "./types.js";
+import { MAX_TIMEOUT_SECONDS, SEVERITIES, type PackageManager } from "./types.js";
 
 export interface Config {
   /** Lowest severity that fails the build. Default: "high". */
@@ -15,6 +15,8 @@ export interface Config {
   /** Fail when an allowlist entry matched nothing. Keeps allowlists honest. */
   failOnUnusedAllowlist: boolean;
   output: "text" | "json";
+  /** How long to wait for the package manager's audit before giving up. */
+  timeoutSeconds: number;
   directory: string;
 }
 
@@ -25,6 +27,9 @@ export const DEFAULT_CONFIG: Config = {
   skipDev: false,
   failOnUnusedAllowlist: false,
   output: "text",
+  // Registry audit endpoints can be very slow on some networks; a single small
+  // project has been observed taking over two minutes.
+  timeoutSeconds: 300,
   directory: process.cwd(),
 };
 
@@ -163,6 +168,21 @@ function validate(raw: Record<string, unknown>, source: string): Partial<Config>
   if (raw.failOnUnusedAllowlist !== undefined) {
     out.failOnUnusedAllowlist = Boolean(raw.failOnUnusedAllowlist);
   }
+  if (raw.timeoutSeconds !== undefined) {
+    // Number(true) is 1, so a boolean would otherwise be accepted as a
+    // one-second timeout. Require an actual number.
+    const t = raw.timeoutSeconds;
+    if (typeof t !== "number" || !Number.isFinite(t) || t <= 0) {
+      throw new ConfigError(
+        `${source}: timeoutSeconds must be a positive number, got ${JSON.stringify(t)}`,
+      );
+    }
+    if (t > MAX_TIMEOUT_SECONDS) {
+      throw new ConfigError(`${source}: timeoutSeconds must be at most ${MAX_TIMEOUT_SECONDS}`);
+    }
+    out.timeoutSeconds = t;
+  }
+
   if (raw.output !== undefined) {
     const o = String(raw.output);
     if (o !== "text" && o !== "json") throw new ConfigError(`${source}: output must be "text" or "json"`);
@@ -170,7 +190,7 @@ function validate(raw: Record<string, unknown>, source: string): Partial<Config>
   }
 
   for (const key of Object.keys(raw)) {
-    const known = ["severity", "allowlist", "packageManager", "skipDev", "failOnUnusedAllowlist", "output"];
+    const known = ["severity", "allowlist", "packageManager", "skipDev", "failOnUnusedAllowlist", "output", "timeoutSeconds"];
     if (!known.includes(key)) {
       // Unknown keys are usually typos. Say so rather than ignoring silently.
       throw new ConfigError(

@@ -60,7 +60,12 @@ lamassu                          # fail on high and critical (default)
 lamassu --severity moderate      # be stricter
 lamassu --skip-dev               # ignore devDependencies
 lamassu --output json            # machine-readable
+lamassu --timeout 600            # slow registry? give it longer
 ```
+
+Registry audit endpoints can be slow — a three-dependency project has been
+observed taking over two minutes. The default wait is 300 seconds; raise it with
+`--timeout` if your network or CI runner needs more.
 
 It detects your package manager from `packageManager` in `package.json`, then from your lockfile. Override it with `--package-manager` if you need to.
 
@@ -158,7 +163,10 @@ Add `--fail-unused` to make that an error and keep allowlists from rotting.
   "failOnUnusedAllowlist": false,
 
   // text | json
-  "output": "text"
+  "output": "text",
+
+  // Seconds to wait for the package manager's audit before giving up.
+  "timeoutSeconds": 300
 }
 ```
 

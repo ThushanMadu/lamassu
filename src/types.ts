@@ -43,3 +43,11 @@ export interface Vulnerability {
   dev?: boolean;
 }
 
+
+/**
+ * Node's timers are backed by a 32-bit signed integer of milliseconds. A larger
+ * delay silently fires immediately, which would kill an audit the instant it
+ * started - so reject it rather than accepting a value that does the opposite
+ * of what was asked.
+ */
+export const MAX_TIMEOUT_SECONDS = Math.floor((2 ** 31 - 1) / 1000);

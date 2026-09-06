@@ -63,7 +63,14 @@ function exec(
   opts: { cwd: string; timeoutMs: number },
 ): Promise<{ stdout: string; stderr: string; code: number | null }> {
   return new Promise((resolve, reject) => {
-    const child = spawn(command, args, { cwd: opts.cwd, shell: false });
+    const child = spawn(command, args, {
+      cwd: opts.cwd,
+      shell: false,
+      // Yarn applies its own 60s network timeout, which is well below ours and
+      // makes it give up on a slow registry before we would. Raise Yarn's to
+      // match, so one timeout governs instead of two disagreeing ones.
+      env: { ...process.env, YARN_HTTP_TIMEOUT: String(opts.timeoutMs) },
+    });
     let stdout = "";
     let stderr = "";
     const timer = setTimeout(() => {

@@ -1,14 +1,25 @@
 #!/usr/bin/env node
+import { createRequire } from "node:module";
 import { resolve } from "node:path";
 import { audit } from "./index.js";
 import { ConfigError, resolveConfig, type Config } from "./config.js";
 import { AuditParseError } from "./core/parse.js";
 import { AuditCommandError } from "./managers/run.js";
 import { parseThreshold } from "./core/threshold.js";
+import { MAX_TIMEOUT_SECONDS } from "./types.js";
 import { renderJsonReport } from "./report/json.js";
 import { renderTextReport, shouldUseColour } from "./report/text.js";
 
-export const VERSION = "0.1.0";
+/**
+ * Read the version from package.json rather than hard-coding it. `npm version`
+ * bumps the manifest and nothing else, so a literal here silently drifts one
+ * release after the first bump.
+ *
+ * The relative path resolves the same from `src/cli.ts` and from `dist/cli.js`,
+ * since both sit one directory below the package root.
+ */
+const require = createRequire(import.meta.url);
+export const VERSION: string = (require("../package.json") as { version: string }).version;
 
 const HELP = `lamassu - the guardian at your gate
 
@@ -25,6 +36,7 @@ Options
       --skip-dev            Ignore devDependencies.
       --fail-unused         Fail when an allowlist entry matched nothing.
   -o, --output <format>     text or json.                         (default: text)
+      --timeout <seconds>   Seconds to wait for the audit.        (default: 300)
       --no-color            Disable colour. NO_COLOR is honoured too.
   -h, --help                Show this help.
   -v, --version             Show the version.
@@ -89,6 +101,17 @@ export function parseArgs(argv: string[]): ParsedArgs {
       case "-s": case "--severity": overrides.severity = parseThreshold(value()); break;
       case "-d": case "--directory": directory = resolve(value()); break;
       case "--skip-dev": overrides.skipDev = true; break;
+      case "--timeout": {
+        const seconds = Number(value());
+        if (!Number.isFinite(seconds) || seconds <= 0) {
+          throw new ConfigError("--timeout must be a positive number of seconds");
+        }
+        if (seconds > MAX_TIMEOUT_SECONDS) {
+          throw new ConfigError(`--timeout must be at most ${MAX_TIMEOUT_SECONDS} seconds`);
+        }
+        overrides.timeoutSeconds = seconds;
+        break;
+      }
       case "--fail-unused": overrides.failOnUnusedAllowlist = true; break;
       case "--no-color": case "--no-colour": colour = false; break;
       case "-o": case "--output": {

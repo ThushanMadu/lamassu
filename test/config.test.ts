@@ -86,6 +86,27 @@ describe("native config", () => {
       expect(() => resolveConfig({}, dir)).toThrow(/not a valid date/);
     });
 
+    /** Number(true) is 1, so a boolean would silently become a 1s timeout. */
+    it("a boolean timeout is not a number", () => {
+      const dir = projectWith({ "lamassu.json": '{"timeoutSeconds": true}' });
+      expect(() => resolveConfig({}, dir)).toThrow(/must be a positive number/);
+    });
+
+    it("a string timeout is not a number", () => {
+      const dir = projectWith({ "lamassu.json": '{"timeoutSeconds": "300"}' });
+      expect(() => resolveConfig({}, dir)).toThrow(/must be a positive number/);
+    });
+
+    it("a timeout beyond Node's timer range would fire immediately", () => {
+      const dir = projectWith({ "lamassu.json": '{"timeoutSeconds": 99999999999}' });
+      expect(() => resolveConfig({}, dir)).toThrow(/at most/);
+    });
+
+    it("accepts a sensible numeric timeout", () => {
+      const dir = projectWith({ "lamassu.json": '{"timeoutSeconds": 600}' });
+      expect(resolveConfig({}, dir).timeoutSeconds).toBe(600);
+    });
+
     it("malformed JSON", () => {
       const dir = projectWith({ "lamassu.json": "{ not json" });
       expect(() => resolveConfig({}, dir)).toThrow(/could not parse/);

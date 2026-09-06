@@ -3,8 +3,8 @@ import { parseAuditOutput } from "./core/parse.js";
 import { atOrAbove } from "./core/threshold.js";
 import { detectPackageManager } from "./managers/detect.js";
 import { runAudit } from "./managers/run.js";
-import type { Config } from "./config.js";
-import type { PackageManager, Vulnerability } from "./types.js";
+import { ConfigError, type Config } from "./config.js";
+import { MAX_TIMEOUT_SECONDS, type PackageManager, type Vulnerability } from "./types.js";
 
 export interface AuditResult {
   passed: boolean;
@@ -27,10 +27,32 @@ export async function audit(config: Config): Promise<AuditResult> {
       ? detectPackageManager(config.directory)
       : config.packageManager;
 
+  // audit() is exported, and resolveConfig merges overrides without
+  // revalidating them, so a programmatic caller can supply anything.
+  const { timeoutSeconds } = config;
+  if (typeof timeoutSeconds !== "number" || !Number.isFinite(timeoutSeconds) || timeoutSeconds <= 0) {
+    throw new ConfigError(
+      `timeoutSeconds must be a positive number, got ${JSON.stringify(timeoutSeconds)}`,
+    );
+  }
+  if (timeoutSeconds > MAX_TIMEOUT_SECONDS) {
+    throw new ConfigError(`timeoutSeconds must be at most ${MAX_TIMEOUT_SECONDS}`);
+  }
+
   const raw = await runAudit(packageManager, {
     cwd: config.directory,
     skipDev: config.skipDev,
+    timeoutMs: timeoutSeconds * 1000,
   });
+
+  // Set LAMASSU_DUMP_RAW=<file> to capture exactly what the package manager
+  // emitted. "Unrecognised audit output" is this tool's main failure mode, and
+  // the raw bytes are the one thing needed to add support for a new format.
+  const dumpTo = process.env.LAMASSU_DUMP_RAW;
+  if (dumpTo) {
+    const { writeFileSync } = await import("node:fs");
+    writeFileSync(dumpTo, raw);
+  }
 
   const all = parseAuditOutput(raw);
   const relevant = atOrAbove(all, config.severity);

@@ -1,4 +1,4 @@
-import { toSeverity, type Vulnerability } from "../types.js";
+import { severityRank, toSeverity, type Vulnerability } from "../types.js";
 
 /**
  * Package managers emit at least four different JSON shapes for the same data,
@@ -233,17 +233,61 @@ export function parseAuditOutput(raw: string): Vulnerability[] {
 
   for (const result of attempts) if (result !== null) return dedupe(result);
 
-  // An empty but valid report is a legitimate "nothing found".
+  // A clean report is only a clean report when the output SAYS it is clean.
+  // Treating "we parsed nothing" as "nothing is wrong" is the one failure this
+  // package exists to prevent, so every branch below requires positive evidence
+  // of zero findings rather than merely an absence of recognised ones.
   if (single && typeof single === "object") {
     const meta = single.metadata?.vulnerabilities;
-    if (meta && typeof meta === "object") return [];
+    if (meta && typeof meta === "object" && countsAreZero(meta)) return [];
     if (single.advisories && !Object.keys(single.advisories).length) return [];
   }
-  if (!single && lines.length) return [];
+
+  // Yarn 1 reports a clean project as a summary with no advisories. That can
+  // arrive as several NDJSON lines or, when nothing else is emitted, as a
+  // single JSON document - so look in both places.
+  const documents = single ? [single] : lines;
+  const summary = documents.find((d) => d?.type === "auditSummary");
+  if (summary && countsAreZero(summary.data?.vulnerabilities)) return [];
+
+  // Showing what actually arrived turns an opaque failure into a diagnosable
+  // one. In practice the commonest cause is not an unknown format at all - it
+  // is the package manager printing a network error where JSON was expected.
+  const snippet = raw.trim().slice(0, 400);
+  const looksLikeError =
+    /error|ERR!|timeout|timed out|ECONN|ENOTFOUND|ENETUNREACH|ETIMEDOUT|EAI_AGAIN|YN\d{4}/i.test(
+      snippet,
+    );
 
   throw new AuditParseError(
-    "could not recognise the audit output format. Please open an issue with the raw output.",
+    looksLikeError
+      ? `the package manager reported an error instead of audit results:\n\n${indent(snippet)}\n\n` +
+        `This is usually a network or registry problem rather than a lamassu bug. ` +
+        `Retry, and if your connection is slow raise the limit with --timeout.`
+      : `could not recognise the audit output format. Please open an issue with the raw ` +
+        `output (LAMASSU_DUMP_RAW=/tmp/raw.txt lamassu). What we received began:\n\n${indent(snippet)}`,
   );
+}
+
+/**
+ * True when a severity-count summary positively reports zero findings.
+ * A summary claiming vulnerabilities we could not parse is a parse failure,
+ * not a clean result.
+ */
+function countsAreZero(counts: unknown): boolean {
+  if (!counts || typeof counts !== "object") return false;
+  const values = Object.entries(counts as Record<string, unknown>)
+    .filter(([key]) => key !== "total")
+    .map(([, value]) => Number(value));
+  if (!values.length || values.some((v) => !Number.isFinite(v))) return false;
+  return values.every((v) => v === 0);
+}
+
+function indent(text: string): string {
+  return text
+    .split("\n")
+    .map((line) => `    ${line}`)
+    .join("\n");
 }
 
 function dedupe(list: Vulnerability[]): Vulnerability[] {
@@ -254,6 +298,9 @@ function dedupe(list: Vulnerability[]): Vulnerability[] {
     prev.foundVersions = [...new Set([...prev.foundVersions, ...v.foundVersions])];
   }
   return [...byId.values()].sort(
-    (a, b) => b.severity.localeCompare(a.severity) || a.module.localeCompare(b.module),
+    // Most severe first. Comparing the severity *strings* would sort them
+    // alphabetically - moderate, low, high, critical - which puts the most
+    // dangerous finding last, where it is easiest to miss.
+    (a, b) => severityRank(b.severity) - severityRank(a.severity) || a.module.localeCompare(b.module),
   );
 }
