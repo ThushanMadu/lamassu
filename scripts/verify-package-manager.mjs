@@ -20,13 +20,14 @@ import { execFileSync, spawnSync } from "node:child_process";
 import {
   chmodSync,
   cpSync,
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -49,7 +50,11 @@ const SETUPS = {
     install: ["npm", ["install", "--no-audit", "--no-fund", "--ignore-scripts"]],
   },
   pnpm: {
-    corepack: "pnpm@latest",
+    // Pinned, like the Yarns. `pnpm@latest` is not reproducible: pnpm 11+ ships
+    // bin/pnpm.mjs where older Corepack expects bin/pnpm.cjs, so "latest" fails
+    // on any machine whose Corepack has not been updated. A pinned version means
+    // CI and a contributor's laptop run the same thing.
+    corepack: "pnpm@10.34.5",
     install: ["pnpm", ["install", "--ignore-scripts", "--no-frozen-lockfile"]],
   },
   yarn1: {
@@ -103,9 +108,24 @@ function createShim(name) {
   return file;
 }
 
+/**
+ * Install locations that tools add to an interactive shell profile but which a
+ * non-interactive shell never sees. bun's installer writes ~/.bun/bin into
+ * .zshrc, so `which bun` fails here even on a machine where bun is installed.
+ */
+const EXTRA_BIN_DIRS = [
+  join(homedir(), ".bun", "bin"),
+  join(homedir(), ".volta", "bin"),
+  "/opt/homebrew/bin",
+  "/usr/local/bin",
+].filter((d) => existsSync(d));
+
 /** PATH with our shims first, so `yarn` and `pnpm` resolve through corepack. */
 function pathWithShims() {
-  return { ...process.env, PATH: `${shimDir}:${process.env.PATH}` };
+  return {
+    ...process.env,
+    PATH: [shimDir, ...EXTRA_BIN_DIRS, process.env.PATH].filter(Boolean).join(":"),
+  };
 }
 
 function step(name, fn) {
@@ -182,7 +202,13 @@ try {
       createShim(cmd);
       console.log(`   shim: ${join(shimDir, cmd)} -> corepack ${cmd}`);
     }
-    execFileSync(cmd, args, { cwd: workdir, stdio: "inherit", env: pathWithShims() });
+    execFileSync(cmd, args, {
+      cwd: workdir,
+      stdio: "inherit",
+      env: pathWithShims(),
+      // Resolve through the extended PATH rather than the parent's.
+      shell: false,
+    });
   });
 
   step("audit real output from this package manager (expect exit 1)", () => {
