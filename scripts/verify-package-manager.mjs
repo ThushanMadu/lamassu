@@ -29,7 +29,7 @@ import {
 } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { delimiter, dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 /**
  * On Windows, npm/yarn/pnpm/corepack resolve to `.cmd` shims, and Node's fix
@@ -45,8 +45,13 @@ const CLI = join(ROOT, "dist", "cli.js");
 
 // The library itself, so policy behaviour can be checked against the captured
 // output without paying for another network round trip.
+//
+// import() requires a file:// URL for an absolute path on Windows - a raw
+// "D:\..." string trips ERR_UNSUPPORTED_ESM_URL_SCHEME because the loader
+// reads the "D:" as a protocol. pathToFileURL() is the correct conversion on
+// every platform, so it is used here even though POSIX never needed it.
 const { parseAuditOutput, atOrAbove, applyAllowlist, renderTextReport } = await import(
-  join(ROOT, "dist", "index.js")
+  pathToFileURL(join(ROOT, "dist", "index.js")).href
 );
 
 /** Direct dependencies of the fixture: every package manager must find these. */

@@ -1,13 +1,21 @@
+<div align="center">
+
 # lamassu
 
-**Fail your CI build on vulnerable dependencies.** Works with npm, Yarn 1–4, pnpm and Bun.
+**The guardian at your gate.**
+Fail your CI build on vulnerable dependencies — npm, Yarn 1–4, pnpm and Bun.
 
 > In Assyria, colossal winged guardians stood at every city gate.
 > Nothing harmful passed.
 
 [![CI](https://github.com/ThushanMadu/lamassu/actions/workflows/ci.yml/badge.svg)](https://github.com/ThushanMadu/lamassu/actions/workflows/ci.yml)
-[![npm](https://img.shields.io/npm/v/lamassu.svg)](https://www.npmjs.com/package/lamassu)
+[![npm version](https://img.shields.io/npm/v/lamassu.svg)](https://www.npmjs.com/package/lamassu)
+[![npm downloads](https://img.shields.io/npm/dm/lamassu.svg)](https://www.npmjs.com/package/lamassu)
+[![node](https://img.shields.io/node/v/lamassu.svg)](https://www.npmjs.com/package/lamassu)
 [![license](https://img.shields.io/npm/l/lamassu.svg)](./LICENSE)
+[![zero deps](https://img.shields.io/badge/dependencies-0-brightgreen)](./package.json)
+
+</div>
 
 ```bash
 npx lamassu
@@ -24,7 +32,19 @@ lamassu - npm, failing at high and above
 FAIL  1 finding: 1 high
 ```
 
-Exit code `1`. Your pipeline stops.
+Exit code `1`. Your pipeline stops — and every finding prints the exact line to allowlist it if you choose to.
+
+<div align="center">
+
+[**Why lamassu**](#why-this-exists) ·
+[**Install**](#install) ·
+[**Migrating from audit-ci**](#migrating-from-audit-ci) ·
+[**Allowlist**](#allowlist) ·
+[**Config**](#configuration) ·
+[**Limitations**](#limitations) ·
+[**Contributing**](#contributing)
+
+</div>
 
 ---
 
@@ -39,7 +59,7 @@ Meanwhile Yarn 4 changed its audit output to NDJSON. `audit-ci` never adapted, s
 npx yarn@1.22.19 audit-ci --config ./audit-ci.jsonc
 ```
 
-`lamassu` is a from-scratch replacement that speaks every current audit format.
+`lamassu` is a from-scratch replacement that speaks every current audit format, on every current package manager, with zero runtime dependencies of its own.
 
 ## Install
 
@@ -92,6 +112,7 @@ Options with no equivalent (`retry-count`, `report-type`, `registry`) produce a 
 |---|---|---|
 | Yarn 4 | ❌ [unsupported since 2024](https://github.com/IBM/audit-ci/issues/332) | ✅ |
 | Bun | ❌ | ✅ |
+| Windows | ⚠️ untested | ✅ CI-verified |
 | Runtime dependencies | 9 | **0** |
 | Allowlist scoping | advisory id only | advisory, package, or exact version |
 | Dead allowlist entries | silently kept | reported, and `--fail-unused` enforces |
@@ -244,9 +265,26 @@ So lamassu **detects the shape** rather than trusting a package manager to emit 
 
 Everything normalises to a single record keyed on the **GHSA id** — the only identifier stable across ecosystems.
 
-When a format changes upstream, that is one more small parser, not a rewrite. And CI audits a deliberately vulnerable project with every package manager on every run, so drift shows up as a failing build here rather than a bug report from you.
+When a format changes upstream, that is one more small parser, not a rewrite. And CI audits a deliberately vulnerable project with every package manager on Linux — plus npm on Windows, since `.cmd` shims need their own spawn path — on every run, so drift shows up as a failing build here rather than a bug report from you.
+
+## Limitations
+
+Stated plainly, so you know what you're getting:
+
+- **One directory, one audit.** lamassu audits the project in its working directory (or `--directory`). It does not walk a monorepo's workspaces for you — run it once per package, or in each workspace's CI job.
+- **Requires Node ≥ 20.** No support for older runtimes.
+- **No auto-fix.** lamassu reports and gates; it does not upgrade dependencies for you. Every finding names the fixed version when the package manager reports one (`fix available`), but applying it is your call.
+- **No SARIF output yet**, so findings don't currently appear in GitHub's Security tab as native code-scanning alerts. `--output json` gives you machine-readable results to pipe into your own tooling in the meantime.
+- **Only as good as the registry it asks.** lamassu normalises whatever your package manager's audit endpoint returns. If that endpoint is down, slow, or simply doesn't know about a vulnerability yet, lamassu can't either — a network failure exits `2` (loud), not `0` (silent), but it still can't audit what it can't reach.
+- **Yarn PnP is untested.** CI verifies Yarn 4 with the `node-modules` linker. Plug'n'Play mode should work — Yarn's own audit output doesn't change with the linker — but it isn't part of the verification matrix yet.
+
+Found a real gap not listed here? [Open an issue](https://github.com/ThushanMadu/lamassu/issues/new/choose) — see [Contributing](#contributing).
 
 ## Contributing
+
+Issues and PRs are welcome. See [CONTRIBUTING.md](./CONTRIBUTING.md) for the full guide — dev setup, how to add support for a new audit format, and what a good PR looks like.
+
+Quick start:
 
 ```bash
 npm install
@@ -255,14 +293,14 @@ npm test
 npm run build
 ```
 
-To check a package manager end to end:
+To check a package manager end to end against a real audit:
 
 ```bash
 node scripts/verify-package-manager.mjs npm
 ```
 
-Found output we do not parse? Open an issue with the raw JSON — that is the most useful bug report you can file.
+**Found audit output lamassu doesn't recognise? That's the single most useful bug report you can file** — see [Reporting an unparsed format](./CONTRIBUTING.md#reporting-an-unparsed-audit-format).
 
 ## License
 
-MIT
+MIT — see [LICENSE](./LICENSE).
