@@ -14,6 +14,25 @@ export class AuditCommandError extends Error {
   }
 }
 
+/**
+ * Whether `spawn` needs a shell to run `npm`/`yarn`/`pnpm`/`bun` on this platform.
+ *
+ * On Windows, npm/yarn/pnpm resolve via PATH to `.cmd` shims, not native `.exe`
+ * files. Node's fix for CVE-2024-27980 makes `spawn` refuse to run a `.cmd`/
+ * `.bat` target without `shell: true` - it throws EINVAL immediately, on every
+ * Node version this package's `engines` field permits. Without this, lamassu
+ * cannot audit an npm, Yarn, or pnpm project on Windows at all.
+ *
+ * This is safe to do unconditionally on win32: every element that ever reaches
+ * `args` is a fixed string literal chosen by `auditArgs()`'s switch statement
+ * (never user- or file-controlled), so routing through a shell adds no
+ * injection surface. Do not add a dynamic argument here without re-checking
+ * that reasoning.
+ */
+export function shouldUseShell(platform: NodeJS.Platform = process.platform): boolean {
+  return platform === "win32";
+}
+
 /** Yarn changed its audit command at v2, so we need the major version. */
 async function yarnMajor(cwd: string): Promise<number> {
   try {
@@ -65,7 +84,7 @@ function exec(
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, {
       cwd: opts.cwd,
-      shell: false,
+      shell: shouldUseShell(),
       // Yarn applies its own 60s network timeout, which is well below ours and
       // makes it give up on a slow registry before we would. Raise Yarn's to
       // match, so one timeout governs instead of two disagreeing ones.

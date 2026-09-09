@@ -43,6 +43,16 @@ This project follows [Semantic Versioning](https://semver.org/).
 - Zero runtime dependencies.
 - CI matrix that audits a deliberately vulnerable project with every supported
   package manager, and cross-checks that they all reach the same verdict.
+- Fixed: on Windows, auditing an npm, Yarn, or pnpm project failed every time.
+  Those tools resolve to `.cmd` shims there, and Node's fix for CVE-2024-27980
+  refuses to spawn a `.cmd`/`.bat` file without a shell. No CI job had ever
+  exercised the real code path on Windows to catch it — the Windows unit-test
+  job mocked the audit call entirely, and the job that runs real audits was
+  Ubuntu-only. Fixed by using a shell only on `win32`, which is safe here since
+  every spawned argument is a fixed string literal, never user- or
+  file-controlled — no new dependency, no injection surface. CI now also runs
+  a real npm audit on `windows-latest` on every push and every release, so
+  this class of bug cannot hide again.
 
 ### Notes
 

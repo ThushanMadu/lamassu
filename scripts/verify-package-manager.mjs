@@ -28,8 +28,16 @@ import {
   writeFileSync,
 } from "node:fs";
 import { homedir, tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { delimiter, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+
+/**
+ * On Windows, npm/yarn/pnpm/corepack resolve to `.cmd` shims, and Node's fix
+ * for CVE-2024-27980 refuses to spawn those without `shell: true` (throws
+ * EINVAL). Mirrors `shouldUseShell()` in src/managers/run.ts - this script
+ * drives the same tools from outside the product, so it needs the same fix.
+ */
+const IS_WINDOWS = process.platform === "win32";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const FIXTURE = join(ROOT, "test", "fixtures", "vulnerable-project");
@@ -124,7 +132,9 @@ const EXTRA_BIN_DIRS = [
 function pathWithShims() {
   return {
     ...process.env,
-    PATH: [shimDir, ...EXTRA_BIN_DIRS, process.env.PATH].filter(Boolean).join(":"),
+    // `:` on POSIX, `;` on Windows - joining with the wrong one corrupts the
+    // real PATH's own delimiters rather than merely adding an unused entry.
+    PATH: [shimDir, ...EXTRA_BIN_DIRS, process.env.PATH].filter(Boolean).join(delimiter),
   };
 }
 
@@ -198,7 +208,10 @@ try {
     const [cmd, args] = setup.install;
     if (setup.corepack) {
       // Download the pinned version, then expose it on PATH via a shim.
-      execFileSync("corepack", ["prepare", setup.corepack, "--activate"], { stdio: "inherit" });
+      execFileSync("corepack", ["prepare", setup.corepack, "--activate"], {
+        stdio: "inherit",
+        shell: IS_WINDOWS,
+      });
       createShim(cmd);
       console.log(`   shim: ${join(shimDir, cmd)} -> corepack ${cmd}`);
     }
@@ -206,8 +219,9 @@ try {
       cwd: workdir,
       stdio: "inherit",
       env: pathWithShims(),
-      // Resolve through the extended PATH rather than the parent's.
-      shell: false,
+      // Resolve through the extended PATH rather than the parent's. `cmd` here
+      // is npm/yarn/pnpm - a `.cmd` shim on Windows - so it needs a shell there.
+      shell: IS_WINDOWS,
     });
   });
 

@@ -73,6 +73,29 @@ jobs:
           path: verify-output/
           if-no-files-found: ignore
 
+  # On Windows, npm/yarn/pnpm resolve to `.cmd` shims rather than native .exe
+  # files, and Node's CVE-2024-27980 fix refuses to spawn those without
+  # `shell: true` - so this platform needs its own real-audit check, separate
+  # from `verify` above (which is Ubuntu-only). npm is enough to catch a
+  # regression here; it needs no Corepack/Bun setup, unlike the Yarns/pnpm.
+  # This job does not feed `cross-check` below - it is a platform-support
+  # check ("does an audit even run on Windows"), not a cross-package-manager
+  # agreement check.
+  verify-windows:
+    name: verify npm (windows-latest)
+    runs-on: windows-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Verify npm
+        run: node scripts/verify-package-manager.mjs npm
+
   # Every package manager must reach the same verdict on the same project.
   # If one of them starts disagreeing, normalisation has regressed.
   cross-check:
