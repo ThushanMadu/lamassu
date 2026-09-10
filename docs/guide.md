@@ -182,7 +182,7 @@ No upstream fix yet? Allowlist it. Create `lamassu.jsonc` in the project root:
     {
       "id": "GHSA-r28c-9q8g-f849",
       "module": "postcss",
-      "expires": "2026-06-30",
+      "expires": "2027-06-30",
       "reason": "transitive via build tool, waiting on upstream — TICKET-123"
     }
   ]
