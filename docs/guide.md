@@ -11,8 +11,8 @@ formats differ per tool and change between versions, `npm audit` exits non-zero
 for findings *and* for network errors, and there's no built-in way to say "fail
 on high and above, but I've accepted this one advisory until it's fixed."
 
-lamassu is that layer. It runs your package manager's audit, understands every
-output format, and turns the result into one decision:
+lamassu is that layer. It runs your package manager's audit, understands the
+known audit output formats, and turns the result into one decision:
 
 | Exit code | Meaning |
 |:---:|---|
