@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
-import { existsSync } from "node:fs";
-import { join } from "node:path";
+import { readdirSync } from "node:fs";
+import { isAbsolute, join } from "node:path";
 import type { PackageManager } from "../types.js";
 
 export interface RunOptions {
@@ -48,30 +48,49 @@ export function shouldUseShell(platform: NodeJS.Platform = process.platform): bo
  *
  * Resolving to an absolute path here defeats that: `cmd.exe` performs no search
  * when handed one. POSIX needs nothing - `spawn` with `shell: false` there
- * resolves bare names via execvp/PATH and never consults the cwd - so this is a
- * no-op off win32. If nothing is found we return the bare name unchanged: the
- * spawn then behaves exactly as before this guard (and fails with a clear
- * ENOENT if the tool genuinely is not installed), never worse.
+ * resolves bare names via execvp/PATH and never consults the cwd - so this
+ * returns the bare command untouched off win32.
+ *
+ * On win32 it returns `null` when it cannot find an *absolute* PATH hit.
+ * Falling back to the bare name would reopen the hole (cmd.exe would search the
+ * cwd), and a relative PATH entry - `.` above all - would resolve a candidate
+ * against the cwd too, so only absolute PATH directories are considered.
+ * `exec()` turns `null` into the standard "not installed or not on PATH" error
+ * rather than spawning.
  */
 export function resolveExecutable(
   command: string,
   platform: NodeJS.Platform = process.platform,
   env: NodeJS.ProcessEnv = process.env,
-): string {
+): string | null {
   if (platform !== "win32") return command;
 
   // `;` unconditionally: this branch only runs for win32, and `path.delimiter`
   // would be `:` when the tests exercise it from a POSIX host.
   const extensions = (env.PATHEXT ?? ".COM;.EXE;.BAT;.CMD").split(";").filter(Boolean);
-  const pathDirs = (env.PATH ?? "").split(";").filter(Boolean);
+  const pathDirs = (env.PATH ?? "").split(";").filter((dir) => dir && isAbsolute(dir));
+
+  // Match case-insensitively: Windows ships `PATHEXT` uppercase (`.CMD`) but the
+  // shims themselves lowercase (`npm.cmd`), and NTFS resolves the two as one.
+  // Reading the directory into a lower-cased set does that on any host, so this
+  // behaves identically on real Windows and on a POSIX box exercising it in
+  // tests, while still trying the extensions in PATHEXT order.
+  const candidates = ["", ...extensions].map((extension) =>
+    `${command}${extension}`.toLowerCase(),
+  );
 
   for (const dir of pathDirs) {
-    for (const extension of ["", ...extensions]) {
-      const candidate = join(dir, command + extension);
-      if (existsSync(candidate)) return candidate;
+    let entries: Set<string>;
+    try {
+      entries = new Set(readdirSync(dir).map((entry) => entry.toLowerCase()));
+    } catch {
+      continue; // a non-existent or unreadable PATH entry is not our problem
+    }
+    for (const name of candidates) {
+      if (entries.has(name)) return join(dir, name);
     }
   }
-  return command;
+  return null;
 }
 
 /** Yarn changed its audit command at v2, so we need the major version. */
@@ -125,13 +144,19 @@ function exec(
   return new Promise((resolve, reject) => {
     const useShell = shouldUseShell();
     const resolved = resolveExecutable(command);
+    if (resolved === null) {
+      // win32, and no absolute PATH hit. Spawning the bare name here would let
+      // cmd.exe search the untrusted audit cwd (CWE-426); fail cleanly instead.
+      reject(new AuditCommandError(`\`${command}\` is not installed or not on PATH`, "", null));
+      return;
+    }
     // With `shell: true`, Node joins `[file, ...args]` with spaces and does not
     // quote the file, so an absolute path containing a space (the usual
     // `C:\Program Files\nodejs\npm.cmd`) would be split by cmd.exe. Quoting it
     // here survives cmd.exe's `/s` handling, which strips exactly one outer
-    // pair of quotes. Harmless when the path has no space or is the bare
-    // fallback name. `args` are all fixed literals from `auditArgs()` - see
-    // `shouldUseShell()` - so they need no quoting.
+    // pair of quotes. Harmless when the path has no space. `args` are all fixed
+    // literals from `auditArgs()` - see `shouldUseShell()` - so they need no
+    // quoting.
     const file = useShell ? `"${resolved}"` : resolved;
 
     const child = spawn(file, args, {

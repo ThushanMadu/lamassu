@@ -55,17 +55,14 @@ describe("resolveExecutable", () => {
     }
   });
 
-  // Windows and macOS both match `npm.cmd` case-insensitively, and the returned
-  // string carries the PATHEXT casing (`.CMD`), so assertions compare lower-cased.
-  const sameFile = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
-
   it("resolves a .cmd shim on the PATH to its absolute location", () => {
     const dir = withBin(["npm.cmd"]);
+    // PATHEXT uppercase, shim lowercase - the real Windows arrangement.
     const resolved = resolveExecutable("npm", "win32", { PATH: dir, PATHEXT: ".EXE;.CMD" });
-    expect(sameFile(resolved, join(dir, "npm.cmd"))).toBe(true);
+    expect(resolved).toBe(join(dir, "npm.cmd"));
   });
 
-  it("tries PATHEXT extensions in order and prefers an earlier PATH entry", () => {
+  it("prefers an earlier PATH entry over a later one", () => {
     const first = withBin([]); // nothing here
     const second = withBin(["yarn.cmd"]);
     const third = withBin(["yarn.exe"]);
@@ -73,19 +70,51 @@ describe("resolveExecutable", () => {
       PATH: [first, second, third].join(";"),
       PATHEXT: ".EXE;.CMD",
     });
-    expect(sameFile(resolved, join(second, "yarn.cmd"))).toBe(true);
+    expect(resolved).toBe(join(second, "yarn.cmd"));
+  });
+
+  it("honours PATHEXT precedence within one directory", () => {
+    // `.EXE` before `.CMD` in PATHEXT, both present - `.exe` wins.
+    const dir = withBin(["pnpm.cmd", "pnpm.exe"]);
+    const resolved = resolveExecutable("pnpm", "win32", { PATH: dir, PATHEXT: ".EXE;.CMD" });
+    expect(resolved).toBe(join(dir, "pnpm.exe"));
+  });
+
+  it("resolves a bare .exe with no PATHEXT match needed", () => {
+    const dir = withBin(["bun.exe"]);
+    expect(resolveExecutable("bun", "win32", { PATH: dir, PATHEXT: ".EXE;.CMD" })).toBe(
+      join(dir, "bun.exe"),
+    );
   });
 
   it("only consults PATH - a shim in some other directory is never returned", () => {
     const onPath = withBin([]);
     const elsewhere = withBin(["pnpm.cmd"]); // present, but not on PATH
     expect(elsewhere).not.toBe(onPath);
-    expect(resolveExecutable("pnpm", "win32", { PATH: onPath, PATHEXT: ".CMD" })).toBe("pnpm");
+    expect(resolveExecutable("pnpm", "win32", { PATH: onPath, PATHEXT: ".CMD" })).toBeNull();
   });
 
-  it("falls back to the bare name when nothing matches", () => {
+  it("returns null on win32 when nothing on PATH matches - never a bare fallback", () => {
+    // A bare fallback would let cmd.exe search the untrusted audit cwd (CWE-426).
     const dir = withBin(["something-else.cmd"]);
-    expect(resolveExecutable("bun", "win32", { PATH: dir, PATHEXT: ".EXE;.CMD" })).toBe("bun");
+    expect(resolveExecutable("bun", "win32", { PATH: dir, PATHEXT: ".EXE;.CMD" })).toBeNull();
+  });
+
+  it("ignores relative PATH entries - `.` must not resolve against the cwd", () => {
+    const real = withBin(["npm.cmd"]);
+    // `.` and a bare relative name both point at the process cwd; neither counts.
+    const resolved = resolveExecutable("npm", "win32", {
+      PATH: [".", "relative/bin", real].join(";"),
+      PATHEXT: ".CMD",
+    });
+    expect(resolved).toBe(join(real, "npm.cmd")); // only the absolute entry won
+  });
+
+  it("returns null when every PATH entry is relative", () => {
+    withBin(["npm.cmd"]); // exists somewhere, but PATH below is all relative
+    expect(
+      resolveExecutable("npm", "win32", { PATH: [".", "node_modules/.bin"].join(";"), PATHEXT: ".CMD" }),
+    ).toBeNull();
   });
 
   it("has no cwd parameter - it structurally cannot search the working directory", () => {
@@ -130,13 +159,26 @@ describe("exec (via runAudit) chooses shell per platform", () => {
 
     vi.doMock("node:child_process", () => ({ spawn: spawnMock }));
     const originalPlatform = Object.getOwnPropertyDescriptor(process, "platform")!;
+    const originalPath = process.env.PATH;
     Object.defineProperty(process, "platform", { value: platform, configurable: true });
+
+    // On win32, resolveExecutable() requires an absolute PATH hit before it will
+    // spawn (it returns null otherwise). Give it a Windows-shaped PATH with a
+    // real shim so the shell-option assertion is what actually gets tested.
+    let shimDir: string | undefined;
+    if (platform === "win32") {
+      shimDir = mkdtempSync(join(tmpdir(), "lamassu-run-"));
+      writeFileSync(join(shimDir, "npm.cmd"), "");
+      process.env.PATH = shimDir; // win32 branch splits on ";", so one entry
+    }
 
     try {
       const { runAudit } = await import("../src/managers/run.js");
       await runAudit("npm", { cwd: "/tmp/does-not-matter", timeoutMs: 5_000 });
     } finally {
       Object.defineProperty(process, "platform", originalPlatform);
+      process.env.PATH = originalPath;
+      if (shimDir) rmSync(shimDir, { recursive: true, force: true });
     }
 
     return spawnMock;
@@ -153,6 +195,28 @@ describe("exec (via runAudit) chooses shell per platform", () => {
     const spawnMock = await runWithMockedSpawn("linux");
     const [, , options] = spawnMock.mock.calls[0]!;
     expect(options).toMatchObject({ shell: false });
+  });
+
+  it("on win32, fails cleanly instead of spawning when nothing is on an absolute PATH", async () => {
+    vi.resetModules();
+    const spawnMock = vi.fn();
+    vi.doMock("node:child_process", () => ({ spawn: spawnMock }));
+
+    const originalPlatform = Object.getOwnPropertyDescriptor(process, "platform")!;
+    const originalPath = process.env.PATH;
+    Object.defineProperty(process, "platform", { value: "win32", configurable: true });
+    process.env.PATH = ".;node_modules/.bin"; // all relative - none usable
+
+    try {
+      const { runAudit } = await import("../src/managers/run.js");
+      await expect(runAudit("npm", { cwd: "/tmp/x", timeoutMs: 5_000 })).rejects.toThrow(
+        /not installed or not on PATH/,
+      );
+      expect(spawnMock).not.toHaveBeenCalled();
+    } finally {
+      Object.defineProperty(process, "platform", originalPlatform);
+      process.env.PATH = originalPath;
+    }
   });
 
   it("passes shell: false to spawn on darwin", async () => {
