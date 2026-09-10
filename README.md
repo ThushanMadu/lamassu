@@ -44,17 +44,19 @@ severity threshold you set.
 ```console
 $ npx lamassu
 
-  lamassu — npm, failing at high and above
+  lamassu - npm, failing at high and above
 
-  CRITICAL  minimist   Prototype Pollution
-            affects <1.2.6  ·  found 1.2.0  ·  fix available
-            allowlist:  minimist|GHSA-xvch-5gv4-984h
+  CRITICAL minimist  Prototype Pollution
+           affects <1.2.6 - fix available
+           https://github.com/advisories/GHSA-xvch-5gv4-984h
+           allowlist as: minimist|GHSA-xvch-5gv4-984h
 
-  HIGH      lodash     Command Injection in lodash
-            affects <4.17.21  ·  found 4.17.15  ·  fix available
-            allowlist:  lodash|GHSA-35jh-r3h4-6jhm
+  HIGH     lodash  Command Injection in lodash
+           affects <4.17.21 - fix available
+           https://github.com/advisories/GHSA-35jh-r3h4-6jhm
+           allowlist as: lodash|GHSA-35jh-r3h4-6jhm
 
-  2 findings — 1 critical, 1 high
+  FAIL  2 findings: 1 critical, 1 high
 
 $ echo $?
 1

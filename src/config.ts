@@ -42,6 +42,13 @@ export function stripJsonComments(input: string): string {
   let inString = false;
   let inLine = false;
   let inBlock = false;
+  // Drop a trailing comma before `}` / `]`. VS Code's jsonc parser and
+  // audit-ci's config loader both accept them, so a config that worked before
+  // migrating must not fail JSON.parse here.
+  const dropTrailingComma = () => {
+    const trimmed = out.replace(/\s+$/, "");
+    if (trimmed.endsWith(",")) out = trimmed.slice(0, -1);
+  };
   for (let i = 0; i < input.length; i++) {
     const c = input[i]!;
     const next = input[i + 1];
@@ -62,6 +69,7 @@ export function stripJsonComments(input: string): string {
     if (c === '"') { inString = true; out += c; continue; }
     if (c === "/" && next === "/") { inLine = true; i++; continue; }
     if (c === "/" && next === "*") { inBlock = true; i++; continue; }
+    if (c === "}" || c === "]") dropTrailingComma();
     out += c;
   }
   return out;
@@ -134,7 +142,15 @@ export function loadConfigFile(source: ConfigSource): LoadedConfig {
 function validate(raw: Record<string, unknown>, source: string): Partial<Config> {
   const out: Partial<Config> = {};
 
-  if (raw.severity !== undefined) out.severity = parseThreshold(String(raw.severity));
+  if (raw.severity !== undefined) {
+    // parseThreshold throws a plain Error; rethrow as ConfigError so a typo in
+    // the file is reported as a config error, not "unexpected error".
+    try {
+      out.severity = parseThreshold(String(raw.severity));
+    } catch (err) {
+      throw new ConfigError(`${source}: ${(err as Error).message}`);
+    }
+  }
 
   if (raw.allowlist !== undefined) {
     if (!Array.isArray(raw.allowlist)) throw new ConfigError(`${source}: "allowlist" must be an array`);

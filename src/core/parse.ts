@@ -89,10 +89,9 @@ function parseYarnClassic(lines: any[]): Vulnerability[] | null {
     const id = ghsaFrom(a.github_advisory_id, a.url, ...(a.cves ?? [])) ?? String(a.id ?? a.module_name);
     const prev = out.get(id);
     const versions = new Set(prev?.foundVersions ?? []);
+    // resolution.path is "a>b>c"; the installed version lives in findings, so
+    // that is the only place we read it from.
     for (const f of a.findings ?? []) if (f?.version) versions.add(String(f.version));
-    if (line.data.resolution?.path) {
-      // resolution.path is "a>b>c"; the installed version lives in findings.
-    }
     out.set(id, {
       id,
       source: typeof a.id === "number" ? a.id : undefined,
@@ -154,7 +153,15 @@ function parseYarnTreeReport(lines: any[]): Vulnerability[] | null {
  */
 function parseYarnRecursiveMap(doc: any): Vulnerability[] | null {
   if (!doc || typeof doc !== "object" || Array.isArray(doc)) return null;
-  if (doc.advisories || doc.auditReportVersion || doc.metadata) return null;
+  // These keys identify the other documented shapes - but only when they hold
+  // their documented (non-array) types. Here every value is an array of
+  // advisories keyed by package name, and packages named `metadata` /
+  // `advisories` exist, so an array under one of these keys is a real entry.
+  const claimsOtherShape =
+    (doc.advisories !== undefined && !Array.isArray(doc.advisories)) ||
+    (doc.auditReportVersion !== undefined && !Array.isArray(doc.auditReportVersion)) ||
+    (doc.metadata !== undefined && !Array.isArray(doc.metadata));
+  if (claimsOtherShape) return null;
 
   const entries = Object.entries<any>(doc);
   if (!entries.length) return null;
