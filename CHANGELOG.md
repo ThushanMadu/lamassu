@@ -3,7 +3,9 @@
 All notable changes to this project are documented here.
 This project follows [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.1.0] - 2026-09-11
+
+First public release.
 
 ### Added
 
@@ -67,6 +69,20 @@ This project follows [Semantic Versioning](https://semver.org/).
   unverifiable input" invariant is intact). CI now audits a genuinely clean
   project with every package manager on every push, so this whole class — a gate
   that fails the normal, should-pass case — cannot hide again.
+- Fixed: **`npx lamassu` / an installed `lamassu` bin did nothing and exited 0.**
+  The entry-point check compared `import.meta.url` to a raw path string, which
+  never matches when npm runs the bin through its `node_modules/.bin` symlink, so
+  `main()` never ran. It now compares resolved real paths.
+- Fixed: `.jsonc` config files with trailing commas (accepted by VS Code and
+  audit-ci) were rejected. `stripJsonComments` now drops a trailing comma before
+  `}` / `]`.
+- Fixed: a Yarn 4 `--recursive` audit failed to parse when a dependency was
+  literally named `metadata` or `advisories`.
+- audit-ci allowlist entries written in `GHSA-id|package` order are flipped to
+  lamassu's `package|GHSA-id` order on load; dependency-path and `*` wildcard
+  entries, which have no equivalent, are reported instead of silently kept.
+- `--skip-dev` now prints a notice under Bun, whose `bun audit` has no
+  production-only mode.
 
 ### Notes
 
