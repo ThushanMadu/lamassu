@@ -67,6 +67,10 @@ $ echo $?
 
 Findings are ordered worst-first, and each prints the exact line to allowlist it.
 
+> **New to this?** The [**user guide**](docs/guide.md) walks through install,
+> first run, wiring it into CI, and what to do when it finds something. The
+> sections below are the reference.
+
 ## Contents
 
 - [Install](#install)
@@ -83,14 +87,16 @@ Findings are ordered worst-first, and each prints the exact line to allowlist it
 
 ## Install
 
-```bash
-npm install --save-dev lamassu
-```
-
-Or run it without installing:
+Run it once without installing:
 
 ```bash
 npx lamassu
+```
+
+Or add it as a dev dependency:
+
+```bash
+npm install --save-dev lamassu
 ```
 
 Requires Node.js 20 or later. The package is ESM-only.
@@ -98,12 +104,17 @@ Requires Node.js 20 or later. The package is ESM-only.
 ## Usage
 
 ```bash
-lamassu                       # fail on high and critical (default)
-lamassu --severity moderate   # stricter
-lamassu --skip-dev            # ignore devDependencies
-lamassu --output json         # machine-readable
-lamassu --timeout 600         # give a slow registry more time
+npx lamassu                       # fail on high and critical (default)
+npx lamassu --severity moderate   # stricter
+npx lamassu --skip-dev            # ignore devDependencies
+npx lamassu --output json         # machine-readable
+npx lamassu --timeout 600         # give a slow registry more time
 ```
+
+Installed as a dependency, the bare `lamassu` command works **inside an npm
+script** — `"audit": "lamassu --severity high"`, then `npm run audit` — or via
+`npx lamassu`. It is not on your shell PATH unless you install it globally
+(`npm i -g lamassu`).
 
 In CI — the same line works for GitHub Actions, GitLab CI and CircleCI:
 
