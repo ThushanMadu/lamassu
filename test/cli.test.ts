@@ -33,7 +33,7 @@ function sink() {
 
 const dirs: string[] = [];
 function project(files: Record<string, string> = {}): string {
-  const dir = mkdtempSync(join(tmpdir(), "lamassu-cli-"));
+  const dir = mkdtempSync(join(tmpdir(), "bartizan-cli-"));
   dirs.push(dir);
   writeFileSync(join(dir, "package.json"), '{"name":"t","version":"1.0.0"}');
   for (const [name, body] of Object.entries(files)) writeFileSync(join(dir, name), body);
@@ -116,7 +116,7 @@ describe("exit codes", () => {
     });
 
     it("on a broken config file", async () => {
-      const dir = project({ "lamassu.json": "{ not json" });
+      const dir = project({ "bartizan.json": "{ not json" });
       const { code, err } = await run(["-d", dir]);
       expect(code).toBe(2);
       expect(err).toMatch(/config error/);
@@ -161,14 +161,14 @@ describe("exit codes", () => {
 
 describe("--fail-unused", () => {
   it("passes by default when an allowlist entry is dead", async () => {
-    const dir = project({ "lamassu.json": '{"allowlist":["GHSA-vh95-rmgr-6w4m"]}' });
+    const dir = project({ "bartizan.json": '{"allowlist":["GHSA-vh95-rmgr-6w4m"]}' });
     const { code, out } = await run(["-d", dir]);
     expect(code).toBe(0);
     expect(out).toMatch(/matched nothing/);
   });
 
   it("fails when asked to enforce it", async () => {
-    const dir = project({ "lamassu.json": '{"allowlist":["GHSA-vh95-rmgr-6w4m"]}' });
+    const dir = project({ "bartizan.json": '{"allowlist":["GHSA-vh95-rmgr-6w4m"]}' });
     expect((await run(["-d", dir, "--fail-unused"])).code).toBe(1);
   });
 });
@@ -220,9 +220,9 @@ describe("help and version", () => {
 });
 
 /**
- * Regression: npm installs the `lamassu` bin as a symlink, so `process.argv[1]`
- * (`node_modules/.bin/lamassu`) and the resolved module path differ. A raw
- * string compare skipped `main()` for every real install - `npx lamassu` did
+ * Regression: npm installs the `bartizan` bin as a symlink, so `process.argv[1]`
+ * (`node_modules/.bin/bartizan`) and the resolved module path differ. A raw
+ * string compare skipped `main()` for every real install - `npx bartizan` did
  * nothing and exited 0. isEntryPoint() must compare real paths.
  */
 describe("isEntryPoint", () => {
@@ -234,8 +234,8 @@ describe("isEntryPoint", () => {
   const realCli = join(import.meta.dirname, "..", "src", "cli.ts");
   const self = `file://${realCli}`;
 
-  it("matches a symlink that resolves to the module (the .bin/lamassu case)", () => {
-    const link = join(mkdtempSync(join(tmpdir(), "lamassu-bin-")), "lamassu");
+  it("matches a symlink that resolves to the module (the .bin/bartizan case)", () => {
+    const link = join(mkdtempSync(join(tmpdir(), "bartizan-bin-")), "bartizan");
     symlinkSync(realCli, link);
     links.push(link);
     expect(isEntryPoint(link, self)).toBe(true);
@@ -246,6 +246,6 @@ describe("isEntryPoint", () => {
   });
 
   it("returns false rather than throwing when the entry path does not exist", () => {
-    expect(isEntryPoint(join(tmpdir(), "does-not-exist-lamassu"), self)).toBe(false);
+    expect(isEntryPoint(join(tmpdir(), "does-not-exist-bartizan"), self)).toBe(false);
   });
 });

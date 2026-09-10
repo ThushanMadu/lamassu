@@ -39,7 +39,7 @@ export function renderTextReport(report: AllowlistReport, options: TextReportOpt
   const b = (s: string) => (options.colour ? `${BOLD}${s}${RESET}` : s);
   const lines: string[] = [];
 
-  lines.push(b(`lamassu - ${options.packageManager}, failing at ${options.severity} and above`));
+  lines.push(b(`bartizan - ${options.packageManager}, failing at ${options.severity} and above`));
   lines.push("");
 
   if (remaining.length === 0) {

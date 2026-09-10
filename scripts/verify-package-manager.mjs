@@ -13,7 +13,7 @@
  * Offline replay, for when the registry is throttling or you are iterating on
  * the parser:
  *
- *   LAMASSU_VERIFY_RAW=test/fixtures/yarn4-real-4.9.1.ndjson \
+ *   BARTIZAN_VERIFY_RAW=test/fixtures/yarn4-real-4.9.1.ndjson \
  *     node scripts/verify-package-manager.mjs yarn4
  */
 import { execFileSync, spawnSync } from "node:child_process";
@@ -97,14 +97,14 @@ const target = process.argv[2];
  * captured output lets parser and policy changes be checked without paying that
  * cost, and lets CI re-verify an archived format with no network at all.
  */
-const offlineRaw = process.env.LAMASSU_VERIFY_RAW;
+const offlineRaw = process.env.BARTIZAN_VERIFY_RAW;
 const setup = SETUPS[target];
 if (!setup) {
   console.error(`usage: verify-package-manager.mjs <${Object.keys(SETUPS).join("|")}>`);
   process.exit(2);
 }
 
-const workdir = mkdtempSync(join(tmpdir(), `lamassu-verify-${target}-`));
+const workdir = mkdtempSync(join(tmpdir(), `bartizan-verify-${target}-`));
 /** Sibling temp dirs created by the clean-project step; cleaned up at the end. */
 const cleanDirs = [];
 let failed = false;
@@ -112,10 +112,10 @@ let failed = false;
 /**
  * `corepack enable` writes symlinks into the Node bin directory, which usually
  * needs root. `corepack <pm>` works without that, so we put a tiny shim on PATH
- * instead. lamassu spawns `yarn`/`pnpm` directly - exactly as it would on a
+ * instead. bartizan spawns `yarn`/`pnpm` directly - exactly as it would on a
  * developer machine - so this stays a faithful test rather than a special case.
  */
-const shimDir = mkdtempSync(join(tmpdir(), `lamassu-shims-${target}-`));
+const shimDir = mkdtempSync(join(tmpdir(), `bartizan-shims-${target}-`));
 
 function createShim(name) {
   const file = join(shimDir, name);
@@ -161,10 +161,10 @@ function assert(condition, message) {
 }
 
 /** Registry audit calls can stall. Fail loudly rather than hanging in silence. */
-const CLI_TIMEOUT_MS = Number(process.env.LAMASSU_VERIFY_TIMEOUT_MS ?? 360_000);
+const CLI_TIMEOUT_MS = Number(process.env.BARTIZAN_VERIFY_TIMEOUT_MS ?? 360_000);
 
 function runCli(args, extraEnv = {}) {
-  process.stdout.write(`   running: lamassu ${args.join(" ")} ... `);
+  process.stdout.write(`   running: bartizan ${args.join(" ")} ... `);
   const started = Date.now();
   const result = spawnSync(process.execPath, [CLI, "-d", workdir, "--no-color", ...args], {
     encoding: "utf8",
@@ -176,10 +176,10 @@ function runCli(args, extraEnv = {}) {
   if (result.error?.code === "ETIMEDOUT" || result.signal === "SIGTERM") {
     console.log(`timed out after ${seconds}s`);
     throw new Error(
-      `\`lamassu ${args.join(" ")}\` did not finish within ${CLI_TIMEOUT_MS / 1000}s.\n` +
-        `  This is almost always the registry audit endpoint stalling, not lamassu.\n` +
+      `\`bartizan ${args.join(" ")}\` did not finish within ${CLI_TIMEOUT_MS / 1000}s.\n` +
+        `  This is almost always the registry audit endpoint stalling, not bartizan.\n` +
         `  Retry later, or replay a captured run offline:\n` +
-        `    LAMASSU_VERIFY_RAW=<captured file> node scripts/verify-package-manager.mjs ${target}`,
+        `    BARTIZAN_VERIFY_RAW=<captured file> node scripts/verify-package-manager.mjs ${target}`,
     );
   }
   console.log(`exit ${result.status} in ${seconds}s`);
@@ -241,7 +241,7 @@ try {
       return;
     }
     const { code, stdout, stderr } = runCli(["--severity", "low", "--output", "json"], {
-      LAMASSU_DUMP_RAW: rawFile,
+      BARTIZAN_DUMP_RAW: rawFile,
     });
     if (stderr.trim()) console.log(`   stderr: ${stderr.trim().split("\n")[0]}`);
 
@@ -295,7 +295,7 @@ try {
     // A sibling temp dir, not a subdir of `workdir`: Yarn Berry treats a
     // package.json nested inside another project as a broken workspace and
     // refuses to install.
-    const cleanDir = mkdtempSync(join(tmpdir(), `lamassu-verify-${target}-clean-`));
+    const cleanDir = mkdtempSync(join(tmpdir(), `bartizan-verify-${target}-clean-`));
     cleanDirs.push(cleanDir);
     cpSync(CLEAN_FIXTURE, cleanDir, { recursive: true });
     if (setup.packageManager) {

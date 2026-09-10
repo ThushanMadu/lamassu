@@ -12,9 +12,9 @@ labels: bug
 ### Reproduction
 
 - Package manager and version:
-- lamassu version:
+- bartizan version:
 - Node version:
-- Config (`lamassu.json` or `audit-ci.jsonc`):
+- Config (`bartizan.json` or `audit-ci.jsonc`):
 
 ```jsonc
 

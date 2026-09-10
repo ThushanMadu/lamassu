@@ -5,7 +5,8 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## [0.1.0] - 2026-09-11
 
-First public release.
+First public release. Briefly published as `lamassu`; renamed to `bartizan`
+before adoption to avoid a name clash with an unrelated package ecosystem.
 
 ### Added
 
@@ -27,9 +28,9 @@ First public release.
 - `--timeout` / `timeoutSeconds` for slow registries. Also raises Yarn's own
   60s network timeout to match, so one setting governs instead of two
   disagreeing ones.
-- `LAMASSU_DUMP_RAW=<file>` writes the package manager's raw audit output, so a
+- `BARTIZAN_DUMP_RAW=<file>` writes the package manager's raw audit output, so a
   new format can be reported without reconstructing the command by hand.
-- `LAMASSU_VERIFY_RAW=<file>` replays a captured run offline, for iterating on
+- `BARTIZAN_VERIFY_RAW=<file>` replays a captured run offline, for iterating on
   the parser without hitting a throttling registry.
 - Parse failures now show what actually arrived, and distinguish "the package
   manager errored" from "we do not know this format". A network timeout used to
@@ -57,19 +58,19 @@ First public release.
   this class of bug cannot hide again.
 - Fixed (Windows, CWE-426): the shell spawn above runs through `cmd.exe`, which
   searches the current directory before `PATH`. Audits run with the working
-  directory set to a project lamassu does not control, so a repository shipping
+  directory set to a project bartizan does not control, so a repository shipping
   its own `npm.cmd` / `yarn.cmd` / `pnpm.cmd` / `bun.cmd` in its root could run
   in place of the real tool. The package manager is now resolved to an absolute
   path against `PATH` only — never the working directory — before the spawn.
 - Fixed: **clean Yarn 4 and Bun projects exited `2`.** The "clean audit" signal
-  differs per package manager, and lamassu's clean-detection had only ever been
+  differs per package manager, and bartizan's clean-detection had only ever been
   built from vulnerable fixtures. Yarn ≥ 2 emits *nothing at all* and exits 0 on
   a clean project; Bun emits a bare `{}`. Both are now recognised as deliberate,
   commented clean-report shapes (never a silent fallthrough — the "never pass on
   unverifiable input" invariant is intact). CI now audits a genuinely clean
   project with every package manager on every push, so this whole class — a gate
   that fails the normal, should-pass case — cannot hide again.
-- Fixed: **`npx lamassu` / an installed `lamassu` bin did nothing and exited 0.**
+- Fixed: **`npx bartizan` / an installed `bartizan` bin did nothing and exited 0.**
   The entry-point check compared `import.meta.url` to a raw path string, which
   never matches when npm runs the bin through its `node_modules/.bin` symlink, so
   `main()` never ran. It now compares resolved real paths.
@@ -79,7 +80,7 @@ First public release.
 - Fixed: a Yarn 4 `--recursive` audit failed to parse when a dependency was
   literally named `metadata` or `advisories`.
 - audit-ci allowlist entries written in `GHSA-id|package` order are flipped to
-  lamassu's `package|GHSA-id` order on load; dependency-path and `*` wildcard
+  bartizan's `package|GHSA-id` order on load; dependency-path and `*` wildcard
   entries, which have no equivalent, are reported instead of silently kept.
 - `--skip-dev` now prints a notice under Bun, whose `bun audit` has no
   production-only mode.

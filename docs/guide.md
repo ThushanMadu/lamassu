@@ -1,8 +1,8 @@
-# lamassu — user guide
+# bartizan — user guide
 
 A walkthrough from zero to a working CI security gate.
 
-## What lamassu does
+## What bartizan does
 
 Your package manager already checks dependencies against a database of known
 vulnerabilities — `npm audit`, `yarn npm audit`, `pnpm audit`, `bun audit`. What
@@ -11,7 +11,7 @@ formats differ per tool and change between versions, `npm audit` exits non-zero
 for findings *and* for network errors, and there's no built-in way to say "fail
 on high and above, but I've accepted this one advisory until it's fixed."
 
-lamassu is that layer. It runs your package manager's audit, understands the
+bartizan is that layer. It runs your package manager's audit, understands the
 known audit output formats, and turns the result into one decision:
 
 | Exit code | Meaning |
@@ -23,7 +23,7 @@ known audit output formats, and turns the result into one decision:
 Exit `2` is never collapsed to `0`: a gate that can't check must not look like
 one that passed.
 
-lamassu changes nothing — no writes to `package.json`, the lockfile, or
+bartizan changes nothing — no writes to `package.json`, the lockfile, or
 `node_modules`.
 
 ## 1. Try it, no install
@@ -31,14 +31,14 @@ lamassu changes nothing — no writes to `package.json`, the lockfile, or
 In any project with a lockfile:
 
 ```bash
-npx lamassu
+npx bartizan
 ```
 
-`npx` downloads lamassu into a cache, runs it once, and doesn't touch your
+`npx` downloads bartizan into a cache, runs it once, and doesn't touch your
 project. Good for a first look. You'll see something like:
 
 ```
-lamassu - npm, failing at high and above
+bartizan - npm, failing at high and above
 
   HIGH     postcss  PostCSS: Path Traversal in Previous Source Map Auto-Loading
            affects <=8.5.17 - fix available
@@ -55,7 +55,7 @@ it.
 Check the exit code:
 
 ```bash
-npx lamassu; echo "exit: $?"
+npx bartizan; echo "exit: $?"
 ```
 
 `1` means it found something — that's the number CI reads.
@@ -65,35 +65,35 @@ npx lamassu; echo "exit: $?"
 For anything beyond a first look, add it as a dev dependency:
 
 ```bash
-npm i -D lamassu
+npm i -D bartizan
 ```
 
-Now — and this is the part that trips people up — the bare command `lamassu`
+Now — and this is the part that trips people up — the bare command `bartizan`
 still won't work in your shell:
 
 ```
-$ lamassu
-zsh: command not found: lamassu
+$ bartizan
+zsh: command not found: bartizan
 ```
 
 That's expected. A locally-installed package's command lives in
 `node_modules/.bin/`, which is not on your PATH. Run it one of three ways:
 
 ```bash
-npx lamassu
+npx bartizan
 ```
 
 ```bash
-./node_modules/.bin/lamassu
+./node_modules/.bin/bartizan
 ```
 
-Or, most commonly, from an npm script — inside a script, `lamassu` resolves
+Or, most commonly, from an npm script — inside a script, `bartizan` resolves
 automatically:
 
 ```jsonc
 // package.json
 "scripts": {
-  "audit": "lamassu --severity high"
+  "audit": "bartizan --severity high"
 }
 ```
 
@@ -101,8 +101,8 @@ automatically:
 npm run audit
 ```
 
-That script form is what you'll use in CI. (If you want `lamassu` on your PATH
-everywhere for poking at other repos: `npm i -g lamassu`. Not needed for CI.)
+That script form is what you'll use in CI. (If you want `bartizan` on your PATH
+everywhere for poking at other repos: `npm i -g bartizan`. Not needed for CI.)
 
 ## 3. Choose a threshold
 
@@ -110,7 +110,7 @@ The default is `high` — fail on `high` and `critical`. Levels, lowest to
 highest: `info`, `low`, `moderate`, `high`, `critical`.
 
 ```bash
-npx lamassu --severity moderate
+npx bartizan --severity moderate
 ```
 
 Start at `high`. Tighten to `moderate` once you're consistently clean.
@@ -130,7 +130,7 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 22 }
       - run: npm ci
-      - run: npx lamassu --severity high
+      - run: npx bartizan --severity high
 ```
 
 **GitLab CI:**
@@ -140,10 +140,10 @@ audit:
   image: node:22
   script:
     - npm ci
-    - npx lamassu --severity high
+    - npx bartizan --severity high
 ```
 
-**CircleCI and others** — same command, `npx lamassu --severity high`, as a
+**CircleCI and others** — same command, `npx bartizan --severity high`, as a
 build step.
 
 Then open a pull request that adds a vulnerable dependency (for example
@@ -152,7 +152,7 @@ actually connected, not just present.
 
 ## 5. Handle a finding
 
-When lamassu fails, you have three options per advisory.
+When bartizan fails, you have three options per advisory.
 
 ### a. Fix it
 
@@ -173,7 +173,7 @@ Then bump whatever is holding it back.
 
 ### b. Accept it, with a deadline
 
-No upstream fix yet? Allowlist it. Create `lamassu.jsonc` in the project root:
+No upstream fix yet? Allowlist it. Create `bartizan.jsonc` in the project root:
 
 ```jsonc
 {
@@ -192,7 +192,7 @@ No upstream fix yet? Allowlist it. Create `lamassu.jsonc` in the project root:
 After `expires`, the entry stops suppressing and the build fails again — so an
 accepted risk gets revisited instead of forgotten silently.
 
-The short form works too, and lamassu prints it for you in the report:
+The short form works too, and bartizan prints it for you in the report:
 
 ```jsonc
 { "allowlist": ["postcss|GHSA-r28c-9q8g-f849"] }
@@ -214,13 +214,13 @@ in a package added months later.
 If the finding is only in build tooling and you've decided that's acceptable:
 
 ```bash
-npx lamassu --skip-dev
+npx bartizan --skip-dev
 ```
 
 ## 6. Keep the allowlist honest
 
 When an allowlisted advisory is fixed upstream, its entry now matches nothing.
-lamassu reports that:
+bartizan reports that:
 
 ```
 WARN  1 allowlist entry matched nothing (likely fixed — safe to delete):
@@ -230,7 +230,7 @@ WARN  1 allowlist entry matched nothing (likely fixed — safe to delete):
 Turn that into a build failure so dead entries don't accumulate:
 
 ```bash
-npx lamassu --fail-unused
+npx bartizan --fail-unused
 ```
 
 ## How it works
@@ -242,10 +242,10 @@ Six steps, every run:
 2. **Run the audit** — `npm audit --json`, `yarn npm audit --json --recursive`,
    `pnpm audit --json`, or `bun audit --json`, in your project directory.
 3. **Parse** — these tools emit five different JSON shapes for the same data and
-   change them between major versions. lamassu detects the shape and normalises
+   change them between major versions. bartizan detects the shape and normalises
    everything to one record per advisory, keyed on the GHSA id (the only
    identifier stable across ecosystems). If the output matches no known shape,
-   lamassu **exits 2** rather than guessing "clean."
+   bartizan **exits 2** rather than guessing "clean."
 4. **Filter** by the severity threshold.
 5. **Apply the allowlist** — advisory-wide, per-package, or
    per-installed-version, with `expires` dates.
@@ -259,13 +259,28 @@ that's slow, raise the limit: `--timeout 600`.
 
 | Symptom | Cause and fix |
 |---|---|
-| `command not found: lamassu` | Local install — use `npx lamassu`, `./node_modules/.bin/lamassu`, or an npm script. |
-| `exit 2`, "could not recognise the audit output" | Your package manager emitted a format lamassu doesn't know yet. This is the single most useful bug report the project can get — run `LAMASSU_DUMP_RAW=/tmp/raw.txt npx lamassu` and [open an issue](https://github.com/ThushanMadu/lamassu/issues/new?template=unparsed-output.md) with `/tmp/raw.txt`. |
+| `command not found: bartizan` | Local install — use `npx bartizan`, `./node_modules/.bin/bartizan`, or an npm script. |
+| `exit 2`, "could not recognise the audit output" | Your package manager emitted a format bartizan doesn't know yet. This is the single most useful bug report the project can get — run `BARTIZAN_DUMP_RAW=/tmp/raw.txt npx bartizan` and [open an issue](https://github.com/ThushanMadu/bartizan/issues/new?template=unparsed-output.md) with `/tmp/raw.txt`. |
 | `exit 2`, timeout | Registry is slow or throttling. Retry, or raise `--timeout`. |
-| Finds different vulnerabilities than `npm audit` | lamassu audits everything, including devDependencies, by default; `npm install`'s summary line sometimes filters. Compare against `npm audit --json`. |
-| `--skip-dev` looks ignored under Bun | `bun audit` has no production-only mode. lamassu prints a notice; the flag genuinely cannot be honoured there. |
+| Finds different vulnerabilities than `npm audit` | bartizan audits everything, including devDependencies, by default; `npm install`'s summary line sometimes filters. Compare against `npm audit --json`. |
+| `--skip-dev` looks ignored under Bun | `bun audit` has no production-only mode. bartizan prints a notice; the flag genuinely cannot be honoured there. |
+
+## Coming from audit-ci?
+
+bartizan reads an existing `audit-ci.json` / `.jsonc` as-is, so switching is a
+one-line change in your CI script:
+
+```diff
+- npx audit-ci --config ./audit-ci.jsonc
++ npx bartizan
+```
+
+It announces compatibility mode and flags anything that doesn't translate
+cleanly (audit-ci's dependency-path and wildcard allowlist entries have no
+equivalent). The [Replacing `audit-ci`](../README.md#replacing-audit-ci) section
+of the README has the full comparison and migration detail.
 
 ## Reference
 
-Full option list, every config-file key, the `audit-ci` migration details, and
-the programmatic API are in the [README](../README.md).
+Full option list, every config-file key, and the programmatic API are in the
+[README](../README.md).

@@ -1,6 +1,6 @@
-# Contributing to lamassu
+# Contributing to bartizan
 
-Thanks for looking at this. lamassu is small on purpose — the guide below is too.
+Thanks for looking at this. bartizan is small on purpose — the guide below is too.
 
 ## Ground rules
 
@@ -11,8 +11,8 @@ Thanks for looking at this. lamassu is small on purpose — the guide below is t
 ## Dev setup
 
 ```bash
-git clone https://github.com/ThushanMadu/lamassu.git
-cd lamassu
+git clone https://github.com/ThushanMadu/bartizan.git
+cd bartizan
 npm install
 npm run typecheck
 npm test
@@ -27,7 +27,7 @@ That's the whole loop. No build step is required to run the tests (`vitest` runs
 src/
   cli.ts              argument parsing, exit codes, --help
   index.ts            public API: audit(), parseAuditOutput(), types
-  config.ts           lamassu.json / audit-ci.jsonc loading and validation
+  config.ts           bartizan.json / audit-ci.jsonc loading and validation
   compat/audit-ci.ts  translates an existing audit-ci config
   core/
     parse.ts          the audit-format detectors — see below
@@ -53,16 +53,16 @@ scripts/
 
 `parseAuditOutput()` in `src/core/parse.ts` must **throw** on anything it does not recognise. It must never fall through to returning `[]` (no vulnerabilities) for input it couldn't actually parse.
 
-This is not a style preference — it is the property that makes lamassu trustworthy as a gate. A parser that silently returns "clean" on unrecognised input is worse than no gate at all, because it looks like a pass. If you're adding a new shape, the last thing you add is the specific, narrow condition that says "this is a genuinely empty, well-formed report" — everything else falls through to the "I don't understand this" error.
+This is not a style preference — it is the property that makes bartizan trustworthy as a gate. A parser that silently returns "clean" on unrecognised input is worse than no gate at all, because it looks like a pass. If you're adding a new shape, the last thing you add is the specific, narrow condition that says "this is a genuinely empty, well-formed report" — everything else falls through to the "I don't understand this" error.
 
 ## Adding support for a new audit format
 
-Package managers change their audit output between major versions without much warning — that's the whole reason `audit-ci` (lamassu's predecessor) stopped working for Yarn 4 users. When you hit a format lamassu doesn't parse:
+Package managers change their audit output between major versions without much warning — that's the whole reason `audit-ci` (bartizan's predecessor) stopped working for Yarn 4 users. When you hit a format bartizan doesn't parse:
 
 1. **Capture the raw bytes.** Either from an issue someone filed (see [Reporting an unparsed audit format](#reporting-an-unparsed-audit-format)), or your own machine:
    ```bash
-   LAMASSU_DUMP_RAW=/tmp/raw.txt lamassu
-   # PowerShell: $env:LAMASSU_DUMP_RAW = "$env:TEMP\raw.txt"; lamassu
+   BARTIZAN_DUMP_RAW=/tmp/raw.txt bartizan
+   # PowerShell: $env:BARTIZAN_DUMP_RAW = "$env:TEMP\raw.txt"; bartizan
    ```
 2. **Save it as a fixture.** Real captured output beats a hand-written approximation — put it in `test/fixtures/` with a name that says what produced it, e.g. `yarn4-real-4.9.1.ndjson`.
 3. **Write the failing test first**, in `test/parse.test.ts`, asserting the fixture parses to the advisories you know it should contain.
@@ -80,7 +80,7 @@ Package managers change their audit output between major versions without much w
 
 ## Verifying against real package managers
 
-Unit tests check that lamassu still parses *recorded* output correctly. They can't tell you whether a package manager changed its output *today*. `scripts/verify-package-manager.mjs` closes that gap — it builds a small project with known-vulnerable pinned dependencies, runs a real audit through the actual package manager, and checks the result against what's expected.
+Unit tests check that bartizan still parses *recorded* output correctly. They can't tell you whether a package manager changed its output *today*. `scripts/verify-package-manager.mjs` closes that gap — it builds a small project with known-vulnerable pinned dependencies, runs a real audit through the actual package manager, and checks the result against what's expected.
 
 ```bash
 node scripts/verify-package-manager.mjs npm     # one package manager
@@ -90,11 +90,11 @@ npm run verify                                   # all of them, sequentially
 Registry audit endpoints throttle repeated requests — expect the full run to take a few minutes, more on a slow connection. If a run times out rather than fails, that's very likely the registry, not a bug; retry after a pause, or replay a previously captured run offline:
 
 ```bash
-LAMASSU_VERIFY_RAW=test/fixtures/yarn4-real-4.9.1.ndjson \
+BARTIZAN_VERIFY_RAW=test/fixtures/yarn4-real-4.9.1.ndjson \
   node scripts/verify-package-manager.mjs yarn4
 
 # PowerShell:
-#   $env:LAMASSU_VERIFY_RAW = "test/fixtures/yarn4-real-4.9.1.ndjson"
+#   $env:BARTIZAN_VERIFY_RAW = "test/fixtures/yarn4-real-4.9.1.ndjson"
 #   node scripts/verify-package-manager.mjs yarn4
 ```
 
@@ -105,10 +105,10 @@ CI runs the same script across npm, Yarn 1, Yarn 4, pnpm and Bun on Linux, plus 
 
 ## Reporting an unparsed audit format
 
-If `lamassu` exits `2` saying it could not recognise the output, that's the single most useful bug report this project can receive — please [open an issue with the template for it](https://github.com/ThushanMadu/lamassu/issues/new?template=unparsed-output.md). Include:
+If `bartizan` exits `2` saying it could not recognise the output, that's the single most useful bug report this project can receive — please [open an issue with the template for it](https://github.com/ThushanMadu/bartizan/issues/new?template=unparsed-output.md). Include:
 
 - The package manager and exact version (`yarn --version`, etc.)
-- The raw output, ideally captured with `LAMASSU_DUMP_RAW=/tmp/raw.txt lamassu` (PowerShell: `$env:LAMASSU_DUMP_RAW = "$env:TEMP\raw.txt"; lamassu`)
+- The raw output, ideally captured with `BARTIZAN_DUMP_RAW=/tmp/raw.txt bartizan` (PowerShell: `$env:BARTIZAN_DUMP_RAW = "$env:TEMP\raw.txt"; bartizan`)
 
 Raw output is what turns into a fixture and a fix — a description of the problem alone usually isn't enough to reproduce it.
 

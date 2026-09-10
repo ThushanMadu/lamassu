@@ -1,8 +1,8 @@
 {
-  "name": "lamassu-clean-fixture",
+  "name": "bartizan-clean-fixture",
   "version": "1.0.0",
   "private": true,
-  "description": "A project with one tiny, stable, advisory-free dependency. Used by CI to prove lamassu exits 0 on a clean audit - the common case that only vulnerable fixtures never exercise.",
+  "description": "A project with one tiny, stable, advisory-free dependency. Used by CI to prove bartizan exits 0 on a clean audit - the common case that only vulnerable fixtures never exercise.",
   "dependencies": {
     "ms": "2.1.3"
   }

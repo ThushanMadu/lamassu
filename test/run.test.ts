@@ -40,7 +40,7 @@ describe("shouldUseShell", () => {
 describe("resolveExecutable", () => {
   const dirs: string[] = [];
   const withBin = (files: string[]): string => {
-    const dir = mkdtempSync(join(tmpdir(), "lamassu-path-"));
+    const dir = mkdtempSync(join(tmpdir(), "bartizan-path-"));
     dirs.push(dir);
     for (const f of files) writeFileSync(join(dir, f), "");
     return dir;
@@ -167,7 +167,7 @@ describe("exec (via runAudit) chooses shell per platform", () => {
     // real shim so the shell-option assertion is what actually gets tested.
     let shimDir: string | undefined;
     if (platform === "win32") {
-      shimDir = mkdtempSync(join(tmpdir(), "lamassu-run-"));
+      shimDir = mkdtempSync(join(tmpdir(), "bartizan-run-"));
       writeFileSync(join(shimDir, "npm.cmd"), "");
       process.env.PATH = shimDir; // win32 branch splits on ";", so one entry
     }

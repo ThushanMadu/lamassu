@@ -12,7 +12,7 @@ import {
 const dirs: string[] = [];
 
 function projectWith(files: Record<string, string>): string {
-  const dir = mkdtempSync(join(tmpdir(), "lamassu-test-"));
+  const dir = mkdtempSync(join(tmpdir(), "bartizan-test-"));
   dirs.push(dir);
   for (const [name, contents] of Object.entries(files)) {
     writeFileSync(join(dir, name), contents);
@@ -66,22 +66,22 @@ describe("stripJsonComments", () => {
 });
 
 describe("native config", () => {
-  it("loads lamassu.json", () => {
-    const dir = projectWith({ "lamassu.json": '{"severity":"critical","skipDev":true}' });
+  it("loads bartizan.json", () => {
+    const dir = projectWith({ "bartizan.json": '{"severity":"critical","skipDev":true}' });
     const config = resolveConfig({}, dir);
     expect(config.severity).toBe("critical");
     expect(config.skipDev).toBe(true);
   });
 
-  it("loads lamassu.jsonc with comments", () => {
+  it("loads bartizan.jsonc with comments", () => {
     const dir = projectWith({
-      "lamassu.jsonc": '{ // policy\n "severity": "low" }',
+      "bartizan.jsonc": '{ // policy\n "severity": "low" }',
     });
     expect(resolveConfig({}, dir).severity).toBe("low");
   });
 
   it("lets command line options win over the file", () => {
-    const dir = projectWith({ "lamassu.json": '{"severity":"low"}' });
+    const dir = projectWith({ "bartizan.json": '{"severity":"low"}' });
     expect(resolveConfig({ severity: "critical" }, dir).severity).toBe("critical");
   });
 
@@ -93,52 +93,52 @@ describe("native config", () => {
 
   describe("rejects bad input rather than ignoring it", () => {
     it("an unknown option is probably a typo", () => {
-      const dir = projectWith({ "lamassu.json": '{"severty":"high"}' });
+      const dir = projectWith({ "bartizan.json": '{"severty":"high"}' });
       expect(() => resolveConfig({}, dir)).toThrow(ConfigError);
     });
 
     it("an unparseable expiry date would otherwise never expire", () => {
       const dir = projectWith({
-        "lamassu.json": '{"allowlist":[{"id":"GHSA-x","expires":"next tuesday"}]}',
+        "bartizan.json": '{"allowlist":[{"id":"GHSA-x","expires":"next tuesday"}]}',
       });
       expect(() => resolveConfig({}, dir)).toThrow(/not a valid date/);
     });
 
     /** Number(true) is 1, so a boolean would silently become a 1s timeout. */
     it("a boolean timeout is not a number", () => {
-      const dir = projectWith({ "lamassu.json": '{"timeoutSeconds": true}' });
+      const dir = projectWith({ "bartizan.json": '{"timeoutSeconds": true}' });
       expect(() => resolveConfig({}, dir)).toThrow(/must be a positive number/);
     });
 
     it("a string timeout is not a number", () => {
-      const dir = projectWith({ "lamassu.json": '{"timeoutSeconds": "300"}' });
+      const dir = projectWith({ "bartizan.json": '{"timeoutSeconds": "300"}' });
       expect(() => resolveConfig({}, dir)).toThrow(/must be a positive number/);
     });
 
     it("a timeout beyond Node's timer range would fire immediately", () => {
-      const dir = projectWith({ "lamassu.json": '{"timeoutSeconds": 99999999999}' });
+      const dir = projectWith({ "bartizan.json": '{"timeoutSeconds": 99999999999}' });
       expect(() => resolveConfig({}, dir)).toThrow(/at most/);
     });
 
     it("accepts a sensible numeric timeout", () => {
-      const dir = projectWith({ "lamassu.json": '{"timeoutSeconds": 600}' });
+      const dir = projectWith({ "bartizan.json": '{"timeoutSeconds": 600}' });
       expect(resolveConfig({}, dir).timeoutSeconds).toBe(600);
     });
 
     it("malformed JSON", () => {
-      const dir = projectWith({ "lamassu.json": "{ not json" });
+      const dir = projectWith({ "bartizan.json": "{ not json" });
       expect(() => resolveConfig({}, dir)).toThrow(/could not parse/);
     });
 
     it("an allowlist that is not an array", () => {
-      const dir = projectWith({ "lamassu.json": '{"allowlist":"GHSA-x"}' });
+      const dir = projectWith({ "bartizan.json": '{"allowlist":"GHSA-x"}' });
       expect(() => resolveConfig({}, dir)).toThrow(/must be an array/);
     });
   });
 });
 
 /**
- * The people most likely to want lamassu are those currently blocked on
+ * The people most likely to want bartizan are those currently blocked on
  * audit-ci, so an unchanged audit-ci config must keep working.
  */
 describe("audit-ci compatibility", () => {
@@ -187,11 +187,11 @@ describe("audit-ci compatibility", () => {
     expect(notices.join("\n")).toMatch(/Scope them as/);
   });
 
-  it("flips audit-ci's `GHSA-id|package` scoped entries into lamassu order", () => {
+  it("flips audit-ci's `GHSA-id|package` scoped entries into bartizan order", () => {
     const dir = projectWith({
       "audit-ci.json": '{"high":true,"allowlist":["GHSA-35jh-r3h4-6jhm|lodash"]}',
     });
-    // audit-ci puts the advisory first; lamassu's parseEntry reads
+    // audit-ci puts the advisory first; bartizan's parseEntry reads
     // `package|GHSA-id`, so an unflipped entry could never match.
     expect(resolveConfig({}, dir).allowlist).toEqual(["lodash|GHSA-35jh-r3h4-6jhm"]);
   });
@@ -222,7 +222,7 @@ describe("audit-ci compatibility", () => {
 
   it("prefers a native config when both exist", () => {
     const dir = projectWith({
-      "lamassu.json": '{"severity":"critical"}',
+      "bartizan.json": '{"severity":"critical"}',
       "audit-ci.json": '{"low":true}',
     });
     expect(findConfigFile(dir)?.kind).toBe("native");

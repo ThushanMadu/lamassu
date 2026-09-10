@@ -4,7 +4,7 @@ import { SEVERITIES, type Severity } from "../types.js";
 /**
  * Reads an existing `audit-ci` configuration file.
  *
- * The people most likely to want lamassu are the ones currently blocked on
+ * The people most likely to want bartizan are the ones currently blocked on
  * audit-ci - so switching should cost one line in a CI script and nothing
  * else. This translates their config rather than asking them to rewrite it.
  */
@@ -23,13 +23,13 @@ export interface CompatResult {
   warnings: string[];
 }
 
-/** audit-ci options that have no lamassu equivalent, and why that is fine. */
+/** audit-ci options that have no bartizan equivalent, and why that is fine. */
 const IGNORED: Record<string, string> = {
   $schema: "",
-  "report-type": "lamassu always reports the findings that fail the build",
+  "report-type": "bartizan always reports the findings that fail the build",
   "retry-count": "not implemented; rerun the step if your registry is flaky",
-  "pass-enoaudit": "lamassu exits 2 when the audit cannot run, which CI should treat as a failure",
-  registry: "lamassu uses the registry your package manager is already configured with",
+  "pass-enoaudit": "bartizan exits 2 when the audit cannot run, which CI should treat as a failure",
+  registry: "bartizan uses the registry your package manager is already configured with",
   "extra-args": "not supported; open an issue if you need it",
   "show-found": "",
   "show-not-found": "",
@@ -39,8 +39,8 @@ const IGNORED: Record<string, string> = {
 const GHSA_RE = /GHSA-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{4}/i;
 
 /**
- * audit-ci and lamassu both write a scoped allowlist entry as `left|right`, but
- * with the sides swapped: audit-ci uses `GHSA-id|dependency>path`, lamassu uses
+ * audit-ci and bartizan both write a scoped allowlist entry as `left|right`, but
+ * with the sides swapped: audit-ci uses `GHSA-id|dependency>path`, bartizan uses
  * `package|GHSA-id`. Flip the entries that map cleanly; collect the ones that
  * do not (dependency paths, `*` wildcards, bare module names) so the caller can
  * warn about them rather than silently shipping an entry that can never match.
@@ -64,10 +64,10 @@ function translateAllowlist(list: unknown[]): {
 
     if (pipe === -1) {
       if (GHSA_RE.test(entry)) {
-        entries.push(entry); // advisory anywhere - identical meaning in lamassu
+        entries.push(entry); // advisory anywhere - identical meaning in bartizan
         bare++;
       } else {
-        unsupported.push(entry); // bare module name - no lamassu equivalent
+        unsupported.push(entry); // bare module name - no bartizan equivalent
       }
       continue;
     }
@@ -78,7 +78,7 @@ function translateAllowlist(list: unknown[]): {
     const rightIsGhsa = GHSA_RE.test(right);
 
     if (rightIsGhsa && !leftIsGhsa) {
-      entries.push(entry); // already lamassu's `package|GHSA-id` order
+      entries.push(entry); // already bartizan's `package|GHSA-id` order
     } else if (leftIsGhsa && !rightIsGhsa && !/[>*]/.test(right)) {
       entries.push(`${right}|${left}`); // audit-ci `GHSA-id|package` -> flip
     } else {
@@ -125,13 +125,13 @@ export function translateAuditCiConfig(raw: unknown, source: string): CompatResu
       );
     }
 
-    // Dependency-path and wildcard entries have no lamassu equivalent. Say so
+    // Dependency-path and wildcard entries have no bartizan equivalent. Say so
     // loudly: a silently-dropped suppression turns into a failing build, and a
     // silently-kept-but-dead entry is a suppression the user thinks they have.
     if (unsupported.length > 0) {
       warnings.push(
         `${unsupported.length} allowlist entr${unsupported.length === 1 ? "y uses" : "ies use"} ` +
-          `audit-ci path or wildcard syntax lamassu cannot express ` +
+          `audit-ci path or wildcard syntax bartizan cannot express ` +
           `(${unsupported.slice(0, 3).join(", ")}${unsupported.length > 3 ? ", ..." : ""}). ` +
           `Re-add them as "package|GHSA-..." or "package@version|GHSA-..." - see the ` +
           `Migrating section of the README.`,

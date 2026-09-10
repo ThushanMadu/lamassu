@@ -12,7 +12,7 @@
  * than in parallel - parallel is faster on CI and counter-productive on a home
  * connection.
  *
- *   LAMASSU_VERIFY_GAP_MS=30000   milliseconds to wait between package managers
+ *   BARTIZAN_VERIFY_GAP_MS=30000   milliseconds to wait between package managers
  */
 import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
@@ -81,7 +81,7 @@ if (!existsSync(join(ROOT, "dist", "cli.js"))) {
   process.exit(2);
 }
 
-const gapMs = Number(process.env.LAMASSU_VERIFY_GAP_MS ?? 15_000);
+const gapMs = Number(process.env.BARTIZAN_VERIFY_GAP_MS ?? 15_000);
 const results = [];
 
 console.log(`\nVerifying ${targets.length} package manager(s), one at a time.`);
@@ -131,7 +131,7 @@ console.log(
 if (failed.length) {
   console.log("  A failure here is often the registry throttling rather than a bug.");
   console.log("  Re-run the failing one on its own, or replay a captured run offline:");
-  console.log("    LAMASSU_VERIFY_RAW=test/fixtures/yarn4-real-4.9.1.ndjson \\");
+  console.log("    BARTIZAN_VERIFY_RAW=test/fixtures/yarn4-real-4.9.1.ndjson \\");
   console.log("      node scripts/verify-package-manager.mjs yarn4\n");
 }
 

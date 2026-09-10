@@ -1,31 +1,46 @@
 {
-  "name": "lamassu",
+  "name": "bartizan",
   "version": "0.1.0",
-  "description": "Fail your CI build on vulnerable dependencies. Works with npm, Yarn 1-4, pnpm and Bun.",
+  "description": "Fail your CI build when a dependency has a known vulnerability. Works with npm, Yarn 1-4, pnpm and Bun. A maintained audit-ci alternative.",
   "keywords": [
     "audit",
+    "audit-ci",
+    "audit-ci-alternative",
+    "npm-audit",
+    "yarn-audit",
+    "pnpm-audit",
+    "bun-audit",
     "security",
+    "security-gate",
     "ci",
+    "cicd",
+    "github-actions",
     "vulnerability",
+    "vulnerability-scanner",
+    "cve",
+    "ghsa",
     "dependencies",
+    "dependency-audit",
+    "sca",
     "supply-chain",
+    "supply-chain-security",
+    "devsecops",
     "npm",
     "yarn",
     "pnpm",
-    "bun",
-    "devsecops"
+    "bun"
   ],
-  "homepage": "https://github.com/ThushanMadu/lamassu#readme",
-  "bugs": "https://github.com/ThushanMadu/lamassu/issues",
+  "homepage": "https://github.com/ThushanMadu/bartizan#readme",
+  "bugs": "https://github.com/ThushanMadu/bartizan/issues",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/ThushanMadu/lamassu.git"
+    "url": "git+https://github.com/ThushanMadu/bartizan.git"
   },
   "license": "MIT",
   "author": "Thushan Madhusanka",
   "type": "module",
   "bin": {
-    "lamassu": "./dist/cli.js"
+    "bartizan": "dist/cli.js"
   },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
