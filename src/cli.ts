@@ -23,12 +23,12 @@ import { renderTextReport, shouldUseColour } from "./report/text.js";
 const require = createRequire(import.meta.url);
 export const VERSION: string = (require("../package.json") as { version: string }).version;
 
-const HELP = `lamassu - the guardian at your gate
+const HELP = `bartizan - the guardian at your gate
 
 Fails your build when dependencies have known vulnerabilities.
 
 Usage
-  lamassu [options]
+  bartizan [options]
 
 Options
   -s, --severity <level>    Lowest severity that fails the build:
@@ -44,7 +44,7 @@ Options
   -v, --version             Show the version.
 
 Config
-  Reads lamassu.json / lamassu.jsonc from the project directory. An existing
+  Reads bartizan.json / bartizan.jsonc from the project directory. An existing
   audit-ci.json / audit-ci.jsonc is read too, so migrating needs no config
   changes. Command line options win over the config file.
 
@@ -135,7 +135,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
         break;
       }
       default:
-        throw new ConfigError(`unknown option "${arg}". Run \`lamassu --help\`.`);
+        throw new ConfigError(`unknown option "${arg}". Run \`bartizan --help\`.`);
     }
   }
 
@@ -153,7 +153,7 @@ export async function main(
   try {
     args = parseArgs(argv);
   } catch (err) {
-    streams.err.write(`lamassu: ${(err as Error).message}\n`);
+    streams.err.write(`bartizan: ${(err as Error).message}\n`);
     return 2;
   }
 
@@ -169,7 +169,7 @@ export async function main(
   try {
     // Notices go to stderr so that `--output json` on stdout stays parseable.
     const config = resolveConfig(args.overrides, args.directory, (message) =>
-      streams.err.write(`lamassu: ${message}\n`),
+      streams.err.write(`bartizan: ${message}\n`),
     );
     const result = await audit(config);
 
@@ -196,14 +196,14 @@ export async function main(
     // Exit 2, never 0. A gate that could not run must not look like a pass -
     // that is the failure mode that lets a vulnerable build through unnoticed.
     if (err instanceof ConfigError) {
-      streams.err.write(`lamassu: config error: ${err.message}\n`);
+      streams.err.write(`bartizan: config error: ${err.message}\n`);
     } else if (err instanceof AuditCommandError) {
-      streams.err.write(`lamassu: ${err.message}\n`);
+      streams.err.write(`bartizan: ${err.message}\n`);
       if (err.stderr.trim()) streams.err.write(`${err.stderr.trim()}\n`);
     } else if (err instanceof AuditParseError) {
-      streams.err.write(`lamassu: ${err.message}\n`);
+      streams.err.write(`bartizan: ${err.message}\n`);
     } else {
-      streams.err.write(`lamassu: unexpected error: ${(err as Error).message}\n`);
+      streams.err.write(`bartizan: unexpected error: ${(err as Error).message}\n`);
     }
     return 2;
   }
@@ -213,7 +213,7 @@ export async function main(
  * Only auto-run when this file is the process entry point, so that tests can
  * import `main` without it executing on import.
  *
- * npm installs the `lamassu` bin as a symlink (`node_modules/.bin/lamassu`), so
+ * npm installs the `bartizan` bin as a symlink (`node_modules/.bin/bartizan`), so
  * `process.argv[1]` and `import.meta.url` name the same file by different paths.
  * Comparing the raw strings would skip `main()` for every real install - the
  * CLI would exit 0 having audited nothing. Compare resolved real paths instead.

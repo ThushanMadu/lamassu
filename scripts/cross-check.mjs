@@ -3,7 +3,7 @@
  * Compares the normalised output every package manager produced for the same
  * vulnerable project.
  *
- * The point of lamassu is that the answer should not depend on which package
+ * The point of bartizan is that the answer should not depend on which package
  * manager asked the question. This asserts that.
  *
  * It deliberately does not demand byte-identical results. Package managers

@@ -135,7 +135,7 @@ describe("parseAuditOutput", () => {
 
     it("includes what it actually received, so the failure is diagnosable", () => {
       expect(() => parseAuditOutput('{"totally":"unexpected"}')).toThrow(/totally/);
-      expect(() => parseAuditOutput('{"totally":"unexpected"}')).toThrow(/LAMASSU_DUMP_RAW/);
+      expect(() => parseAuditOutput('{"totally":"unexpected"}')).toThrow(/BARTIZAN_DUMP_RAW/);
     });
   });
 
@@ -166,7 +166,7 @@ describe("parseAuditOutput", () => {
 
     /**
      * Regression: `bun audit --json` on a clean project emits a bare `{}` and
-     * exits 0. lamassu used to reject that as "could not recognise the audit
+     * exits 0. bartizan used to reject that as "could not recognise the audit
      * output format" and exit 2 - every clean Bun CI build failed. The clean
      * signal was only ever built from vulnerable fixtures.
      */

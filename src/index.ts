@@ -45,10 +45,10 @@ export async function audit(config: Config): Promise<AuditResult> {
     timeoutMs: timeoutSeconds * 1000,
   });
 
-  // Set LAMASSU_DUMP_RAW=<file> to capture exactly what the package manager
+  // Set BARTIZAN_DUMP_RAW=<file> to capture exactly what the package manager
   // emitted. "Unrecognised audit output" is this tool's main failure mode, and
   // the raw bytes are the one thing needed to add support for a new format.
-  const dumpTo = process.env.LAMASSU_DUMP_RAW;
+  const dumpTo = process.env.BARTIZAN_DUMP_RAW;
   if (dumpTo) {
     const { writeFileSync } = await import("node:fs");
     writeFileSync(dumpTo, raw);

@@ -1,5 +1,5 @@
 {
-  "name": "lamassu-vulnerable-fixture",
+  "name": "bartizan-vulnerable-fixture",
   "version": "1.0.0",
   "private": true,
   "description": "Deliberately vulnerable dependencies. Used by CI to verify that every package manager path detects the same advisories.",

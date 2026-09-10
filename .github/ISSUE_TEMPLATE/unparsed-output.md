@@ -1,6 +1,6 @@
 ---
 name: Audit output was not recognised
-about: lamassu exited 2 saying it could not recognise the audit output
+about: bartizan exited 2 saying it could not recognise the audit output
 title: "Unrecognised audit output: <package manager> <version>"
 labels: parser
 ---
@@ -12,20 +12,20 @@ parser for it.
 ### Environment
 
 - Package manager and version: <!-- e.g. yarn 4.9.1 -->
-- lamassu version:
+- bartizan version:
 - Node version:
 - OS:
 
 ### Raw audit output
 
-Easiest way to capture exactly what lamassu received:
+Easiest way to capture exactly what bartizan received:
 
 ```bash
 # bash / zsh
-LAMASSU_DUMP_RAW=/tmp/raw.txt lamassu
+BARTIZAN_DUMP_RAW=/tmp/raw.txt bartizan
 
 # PowerShell
-$env:LAMASSU_DUMP_RAW = "$env:TEMP\raw.txt"; lamassu
+$env:BARTIZAN_DUMP_RAW = "$env:TEMP\raw.txt"; bartizan
 ```
 
 Or run the audit command directly and paste the result. Redact private package

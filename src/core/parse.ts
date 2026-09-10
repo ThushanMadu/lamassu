@@ -276,10 +276,10 @@ export function parseAuditOutput(raw: string): Vulnerability[] {
   throw new AuditParseError(
     looksLikeError
       ? `the package manager reported an error instead of audit results:\n\n${indent(snippet)}\n\n` +
-        `This is usually a network or registry problem rather than a lamassu bug. ` +
+        `This is usually a network or registry problem rather than a bartizan bug. ` +
         `Retry, and if your connection is slow raise the limit with --timeout.`
       : `could not recognise the audit output format. Please open an issue with the raw ` +
-        `output (LAMASSU_DUMP_RAW=/tmp/raw.txt lamassu). What we received began:\n\n${indent(snippet)}`,
+        `output (BARTIZAN_DUMP_RAW=/tmp/raw.txt bartizan). What we received began:\n\n${indent(snippet)}`,
   );
 }
 

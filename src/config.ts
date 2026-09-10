@@ -33,7 +33,7 @@ export const DEFAULT_CONFIG: Config = {
   directory: process.cwd(),
 };
 
-const CONFIG_FILES = ["lamassu.json", "lamassu.jsonc", ".lamassurc", ".lamassurc.json"];
+const CONFIG_FILES = ["bartizan.json", "bartizan.jsonc", ".bartizanrc", ".bartizanrc.json"];
 const AUDIT_CI_FILES = ["audit-ci.json", "audit-ci.jsonc", ".audit-ci.json", ".audit-ci.jsonc"];
 
 /** Strip // and /* *\/ comments so .jsonc files parse, without a dependency. */
