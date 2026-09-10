@@ -135,6 +135,8 @@ Suppress a finding you have consciously accepted. Entries are ordered here from 
 
 **Prefer the scoped forms.** A bare advisory id suppresses that advisory wherever it appears — including somewhere you never intended, in a package added months later. This is a [real defect in audit-ci](https://github.com/IBM/audit-ci/issues/356), and scoping is how you avoid it. Every finding lamassu prints includes the exact line to paste.
 
+> **Version scoping and npm:** `package@version|GHSA-…` only matches when the audit output carries the *installed* version. npm's `npm audit --json` (v7+) reports affected ranges and install paths but not resolved versions, so version-scoped entries don't match under npm today — use the `package|GHSA-…` form there. Yarn, pnpm and Bun report versions and match fully.
+
 ### Expiring an exception
 
 An accepted risk should be revisited, not forgotten:

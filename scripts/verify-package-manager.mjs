@@ -41,6 +41,7 @@ const IS_WINDOWS = process.platform === "win32";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const FIXTURE = join(ROOT, "test", "fixtures", "vulnerable-project");
+const CLEAN_FIXTURE = join(ROOT, "test", "fixtures", "clean-project");
 const CLI = join(ROOT, "dist", "cli.js");
 
 // The library itself, so policy behaviour can be checked against the captured
@@ -104,6 +105,8 @@ if (!setup) {
 }
 
 const workdir = mkdtempSync(join(tmpdir(), `lamassu-verify-${target}-`));
+/** Sibling temp dirs created by the clean-project step; cleaned up at the end. */
+const cleanDirs = [];
 let failed = false;
 
 /**
@@ -183,8 +186,10 @@ function runCli(args, extraEnv = {}) {
   return { code: result.status, stdout: result.stdout ?? "", stderr: result.stderr ?? "" };
 }
 
-// Exactly ONE audit call. Registry audit endpoints are slow and throttle
-// repeated requests, so everything after this runs against the captured bytes.
+// Two audit calls per package manager: one vulnerable project, one clean
+// project. Registry audit endpoints are slow and throttle *repeated identical*
+// requests - these are distinct - and the offline policy checks below run
+// against the captured bytes rather than the network.
 const rawFile = join(workdir, "raw-audit-output.txt");
 let raw;
 let findings;
@@ -275,6 +280,54 @@ try {
     const outDir = join(ROOT, "verify-output");
     mkdirSync(outDir, { recursive: true });
     writeFileSync(join(outDir, `${target}.json`), stdout);
+  });
+
+  // The "clean" signal differs per package manager and is the case vulnerable
+  // fixtures never exercise: npm reports all-zero counts, pnpm an empty
+  // advisories map, Yarn 1 a summary line, Yarn >= 2 *nothing at all*, Bun a
+  // bare `{}`. Clean Yarn 4 and Bun builds both used to exit 2. This step is
+  // the guard: a real clean audit must exit 0.
+  step("a clean project audits to exit 0", () => {
+    if (offlineRaw) {
+      console.log("   skipped (offline)");
+      return;
+    }
+    // A sibling temp dir, not a subdir of `workdir`: Yarn Berry treats a
+    // package.json nested inside another project as a broken workspace and
+    // refuses to install.
+    const cleanDir = mkdtempSync(join(tmpdir(), `lamassu-verify-${target}-clean-`));
+    cleanDirs.push(cleanDir);
+    cpSync(CLEAN_FIXTURE, cleanDir, { recursive: true });
+    if (setup.packageManager) {
+      const manifest = join(cleanDir, "package.json");
+      const pkg = JSON.parse(readFileSync(manifest, "utf8"));
+      pkg.packageManager = setup.corepack;
+      writeFileSync(manifest, JSON.stringify(pkg, null, 2));
+    }
+    if (setup.yarnrc) writeFileSync(join(cleanDir, ".yarnrc.yml"), setup.yarnrc);
+
+    const [cmd, cmdArgs] = setup.install;
+    execFileSync(cmd, cmdArgs, {
+      cwd: cleanDir,
+      stdio: "inherit",
+      env: pathWithShims(),
+      shell: IS_WINDOWS,
+    });
+
+    const { status, stdout, stderr } = spawnSync(
+      process.execPath,
+      [CLI, "-d", cleanDir, "--severity", "low", "--output", "json"],
+      { encoding: "utf8", env: { ...pathWithShims(), NO_COLOR: "1" }, timeout: CLI_TIMEOUT_MS },
+    );
+    if (stderr.trim()) console.log(`   stderr: ${stderr.trim().split("\n")[0]}`);
+    assert(status === 0, `clean project exits 0, got ${status}`);
+    try {
+      const parsed = JSON.parse(stdout);
+      assert(parsed.passed === true, "reports passed: true");
+      assert(parsed.vulnerabilities.length === 0, "reports zero vulnerabilities");
+    } catch {
+      assert(false, "clean-audit stdout is valid JSON");
+    }
   });
 
   step("raw output is captured and parses", () => {
@@ -388,6 +441,7 @@ try {
     rmSync(workdir, { recursive: true, force: true });
   }
   rmSync(shimDir, { recursive: true, force: true });
+  for (const dir of cleanDirs) rmSync(dir, { recursive: true, force: true });
 }
 
 console.log(failed ? `\n✗ ${target} FAILED\n` : `\n✓ ${target} verified\n`);

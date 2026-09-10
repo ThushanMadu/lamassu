@@ -237,10 +237,17 @@ export function parseAuditOutput(raw: string): Vulnerability[] {
   // Treating "we parsed nothing" as "nothing is wrong" is the one failure this
   // package exists to prevent, so every branch below requires positive evidence
   // of zero findings rather than merely an absence of recognised ones.
-  if (single && typeof single === "object") {
+  if (single && typeof single === "object" && !Array.isArray(single)) {
     const meta = single.metadata?.vulnerabilities;
     if (meta && typeof meta === "object" && countsAreZero(meta)) return [];
     if (single.advisories && !Object.keys(single.advisories).length) return [];
+
+    // Bun emits a bare `{}` on a clean audit. An object with no keys at all is
+    // positive evidence of zero findings, not an absence of recognised ones:
+    // npm always carries `auditReportVersion` or `error`, pnpm always carries
+    // `advisories` / `metadata`, so nothing else produces an empty object - it
+    // cannot be a truncated or failed run misread as clean.
+    if (Object.keys(single).length === 0) return [];
   }
 
   // Yarn 1 reports a clean project as a summary with no advisories. That can

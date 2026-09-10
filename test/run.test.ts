@@ -161,3 +161,51 @@ describe("exec (via runAudit) chooses shell per platform", () => {
     expect(options).toMatchObject({ shell: false });
   });
 });
+
+/**
+ * Regression: `yarn npm audit --json --recursive` (Yarn >= 2) emits *nothing*
+ * and exits 0 on a clean project. runAudit used to treat empty stdout as
+ * "the audit could not be run" and throw - every clean Yarn 4 CI build failed
+ * with exit 2. The clean path was only ever exercised against vulnerable
+ * fixtures.
+ */
+describe("runAudit — empty output handling", () => {
+  afterEach(() => {
+    vi.resetModules();
+    vi.restoreAllMocks();
+  });
+
+  /** Mock spawn: `yarn --version` -> a version string; anything else -> empty + exit `code`. */
+  async function runYarnWith(version: string, auditExitCode: number) {
+    vi.resetModules();
+    const spawnMock = vi.fn((_command: string, args: string[]) => {
+      const child = fakeChild();
+      const isVersionProbe = args.includes("--version");
+      queueMicrotask(() => {
+        if (isVersionProbe) child.stdout.emit("data", version);
+        child.emit("close", isVersionProbe ? 0 : auditExitCode);
+      });
+      return child;
+    });
+    vi.doMock("node:child_process", () => ({ spawn: spawnMock }));
+    const { runAudit } = await import("../src/managers/run.js");
+    return runAudit("yarn", { cwd: "/tmp/x", timeoutMs: 5_000 });
+  }
+
+  it("treats empty output + exit 0 from Yarn >= 2 as a clean report", async () => {
+    const raw = await runYarnWith("4.9.1", 0);
+    // Normalised to a shape parseAuditOutput already recognises as clean.
+    const { parseAuditOutput } = await import("../src/core/parse.js");
+    expect(parseAuditOutput(raw)).toEqual([]);
+  });
+
+  it("still throws on empty output when Yarn >= 2 exits non-zero", async () => {
+    await expect(runYarnWith("4.9.1", 1)).rejects.toThrow(/produced no output/);
+  });
+
+  it("still throws on empty output from classic Yarn (< 2)", async () => {
+    // Yarn 1 uses `yarn audit ...`, not `yarn npm audit ...`; empty output
+    // there is a genuine failure, not a clean signal.
+    await expect(runYarnWith("1.22.22", 0)).rejects.toThrow(/produced no output/);
+  });
+});

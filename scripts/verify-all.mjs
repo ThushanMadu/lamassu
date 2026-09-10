@@ -6,10 +6,11 @@
  *   node scripts/verify-all.mjs            # every package manager available here
  *   node scripts/verify-all.mjs npm yarn4  # only these
  *
- * Each package manager makes exactly one registry audit call. Registry audit
- * endpoints throttle repeated requests, so this runs them sequentially with a
- * pause in between rather than in parallel - parallel is faster on CI and
- * counter-productive on a home connection.
+ * Each package manager makes two registry audit calls (one vulnerable project,
+ * one clean project). Registry audit endpoints throttle repeated requests, so
+ * this runs the package managers sequentially with a pause in between rather
+ * than in parallel - parallel is faster on CI and counter-productive on a home
+ * connection.
  *
  *   LAMASSU_VERIFY_GAP_MS=30000   milliseconds to wait between package managers
  */

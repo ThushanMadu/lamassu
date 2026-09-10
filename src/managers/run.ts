@@ -179,7 +179,19 @@ export async function runAudit(pm: PackageManager, options: RunOptions): Promise
     cwd: options.cwd,
     timeoutMs: options.timeoutMs ?? 300_000,
   });
+
   if (!stdout.trim()) {
+    // Yarn >= 2 (`yarn npm audit ...`; classic yarn is `yarn audit ...`)
+    // signals a clean audit by emitting *nothing at all* and exiting 0. Its
+    // tree report is rows-of-findings only, so zero findings is zero rows -
+    // empty stdout here is legitimate, not a failure to run. This is the one
+    // place that is true, it is handled explicitly (never a silent
+    // fallthrough), and only for this exact shape. Normalise to the empty
+    // advisories map, which `parseAuditOutput` already recognises as clean.
+    if (command === "yarn" && args[0] === "npm" && code === 0) {
+      return '{"advisories":{}}';
+    }
+
     throw new AuditCommandError(
       `\`${command} ${args.join(" ")}\` produced no output (exit code ${code}).`,
       stderr,
