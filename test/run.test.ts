@@ -1,4 +1,7 @@
 import { EventEmitter } from "node:events";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 /**
@@ -10,7 +13,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
  * invisibly. These tests exercise the real `exec()` path.
  */
 
-const { shouldUseShell } = await import("../src/managers/run.js");
+const { shouldUseShell, resolveExecutable } = await import("../src/managers/run.js");
 
 describe("shouldUseShell", () => {
   it("is true on win32", () => {
@@ -25,6 +28,68 @@ describe("shouldUseShell", () => {
 
   it("defaults to the real process.platform when called with no argument", () => {
     expect(shouldUseShell()).toBe(process.platform === "win32");
+  });
+});
+
+/**
+ * `shell: true` on Windows routes through cmd.exe, which searches the current
+ * directory before PATH. Audits run with cwd set to a project we do not
+ * control, so a repo shipping its own `npm.cmd` could hijack the audit
+ * (CWE-426). resolveExecutable() resolves against PATH only, closing that.
+ */
+describe("resolveExecutable", () => {
+  const dirs: string[] = [];
+  const withBin = (files: string[]): string => {
+    const dir = mkdtempSync(join(tmpdir(), "lamassu-path-"));
+    dirs.push(dir);
+    for (const f of files) writeFileSync(join(dir, f), "");
+    return dir;
+  };
+  afterEach(() => {
+    while (dirs.length) rmSync(dirs.pop()!, { recursive: true, force: true });
+  });
+
+  it("returns the bare command unchanged off win32", () => {
+    for (const platform of ["linux", "darwin", "freebsd"] as const) {
+      expect(resolveExecutable("npm", platform, { PATH: "/anything" })).toBe("npm");
+    }
+  });
+
+  // Windows and macOS both match `npm.cmd` case-insensitively, and the returned
+  // string carries the PATHEXT casing (`.CMD`), so assertions compare lower-cased.
+  const sameFile = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
+
+  it("resolves a .cmd shim on the PATH to its absolute location", () => {
+    const dir = withBin(["npm.cmd"]);
+    const resolved = resolveExecutable("npm", "win32", { PATH: dir, PATHEXT: ".EXE;.CMD" });
+    expect(sameFile(resolved, join(dir, "npm.cmd"))).toBe(true);
+  });
+
+  it("tries PATHEXT extensions in order and prefers an earlier PATH entry", () => {
+    const first = withBin([]); // nothing here
+    const second = withBin(["yarn.cmd"]);
+    const third = withBin(["yarn.exe"]);
+    const resolved = resolveExecutable("yarn", "win32", {
+      PATH: [first, second, third].join(";"),
+      PATHEXT: ".EXE;.CMD",
+    });
+    expect(sameFile(resolved, join(second, "yarn.cmd"))).toBe(true);
+  });
+
+  it("only consults PATH - a shim in some other directory is never returned", () => {
+    const onPath = withBin([]);
+    const elsewhere = withBin(["pnpm.cmd"]); // present, but not on PATH
+    expect(elsewhere).not.toBe(onPath);
+    expect(resolveExecutable("pnpm", "win32", { PATH: onPath, PATHEXT: ".CMD" })).toBe("pnpm");
+  });
+
+  it("falls back to the bare name when nothing matches", () => {
+    const dir = withBin(["something-else.cmd"]);
+    expect(resolveExecutable("bun", "win32", { PATH: dir, PATHEXT: ".EXE;.CMD" })).toBe("bun");
+  });
+
+  it("has no cwd parameter - it structurally cannot search the working directory", () => {
+    expect(resolveExecutable.length).toBeLessThanOrEqual(3);
   });
 });
 

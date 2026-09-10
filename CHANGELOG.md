@@ -53,6 +53,12 @@ This project follows [Semantic Versioning](https://semver.org/).
   file-controlled — no new dependency, no injection surface. CI now also runs
   a real npm audit on `windows-latest` on every push and every release, so
   this class of bug cannot hide again.
+- Fixed (Windows, CWE-426): the shell spawn above runs through `cmd.exe`, which
+  searches the current directory before `PATH`. Audits run with the working
+  directory set to a project lamassu does not control, so a repository shipping
+  its own `npm.cmd` / `yarn.cmd` / `pnpm.cmd` / `bun.cmd` in its root could run
+  in place of the real tool. The package manager is now resolved to an absolute
+  path against `PATH` only — never the working directory — before the spawn.
 
 ### Notes
 

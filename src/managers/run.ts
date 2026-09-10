@@ -1,4 +1,6 @@
 import { spawn } from "node:child_process";
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 import type { PackageManager } from "../types.js";
 
 export interface RunOptions {
@@ -31,6 +33,45 @@ export class AuditCommandError extends Error {
  */
 export function shouldUseShell(platform: NodeJS.Platform = process.platform): boolean {
   return platform === "win32";
+}
+
+/**
+ * Resolve a bare command to an absolute path, searching PATH only - never the
+ * current directory.
+ *
+ * `shell: true` on Windows routes the spawn through `cmd.exe`, and `cmd.exe`
+ * searches the *current directory before PATH*. Audits run with `cwd` set to a
+ * project we do not control (a cloned repo, an untrusted PR branch), so a
+ * repository that ships its own `npm.cmd` / `yarn.cmd` / `pnpm.cmd` / `bun.cmd`
+ * in its root could otherwise run in place of the real tool - arbitrary code
+ * execution on whoever ran `lamassu` (CWE-426, untrusted search path).
+ *
+ * Resolving to an absolute path here defeats that: `cmd.exe` performs no search
+ * when handed one. POSIX needs nothing - `spawn` with `shell: false` there
+ * resolves bare names via execvp/PATH and never consults the cwd - so this is a
+ * no-op off win32. If nothing is found we return the bare name unchanged: the
+ * spawn then behaves exactly as before this guard (and fails with a clear
+ * ENOENT if the tool genuinely is not installed), never worse.
+ */
+export function resolveExecutable(
+  command: string,
+  platform: NodeJS.Platform = process.platform,
+  env: NodeJS.ProcessEnv = process.env,
+): string {
+  if (platform !== "win32") return command;
+
+  // `;` unconditionally: this branch only runs for win32, and `path.delimiter`
+  // would be `:` when the tests exercise it from a POSIX host.
+  const extensions = (env.PATHEXT ?? ".COM;.EXE;.BAT;.CMD").split(";").filter(Boolean);
+  const pathDirs = (env.PATH ?? "").split(";").filter(Boolean);
+
+  for (const dir of pathDirs) {
+    for (const extension of ["", ...extensions]) {
+      const candidate = join(dir, command + extension);
+      if (existsSync(candidate)) return candidate;
+    }
+  }
+  return command;
 }
 
 /** Yarn changed its audit command at v2, so we need the major version. */
@@ -82,9 +123,20 @@ function exec(
   opts: { cwd: string; timeoutMs: number },
 ): Promise<{ stdout: string; stderr: string; code: number | null }> {
   return new Promise((resolve, reject) => {
-    const child = spawn(command, args, {
+    const useShell = shouldUseShell();
+    const resolved = resolveExecutable(command);
+    // With `shell: true`, Node joins `[file, ...args]` with spaces and does not
+    // quote the file, so an absolute path containing a space (the usual
+    // `C:\Program Files\nodejs\npm.cmd`) would be split by cmd.exe. Quoting it
+    // here survives cmd.exe's `/s` handling, which strips exactly one outer
+    // pair of quotes. Harmless when the path has no space or is the bare
+    // fallback name. `args` are all fixed literals from `auditArgs()` - see
+    // `shouldUseShell()` - so they need no quoting.
+    const file = useShell ? `"${resolved}"` : resolved;
+
+    const child = spawn(file, args, {
       cwd: opts.cwd,
-      shell: shouldUseShell(),
+      shell: useShell,
       // Yarn applies its own 60s network timeout, which is well below ours and
       // makes it give up on a slow registry before we would. Raise Yarn's to
       // match, so one timeout governs instead of two disagreeing ones.

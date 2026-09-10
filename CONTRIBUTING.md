@@ -23,7 +23,7 @@ That's the whole loop. No build step is required to run the tests (`vitest` runs
 
 ## Project layout
 
-```
+```text
 src/
   cli.ts              argument parsing, exit codes, --help
   index.ts            public API: audit(), parseAuditOutput(), types
@@ -62,6 +62,7 @@ Package managers change their audit output between major versions without much w
 1. **Capture the raw bytes.** Either from an issue someone filed (see [Reporting an unparsed audit format](#reporting-an-unparsed-audit-format)), or your own machine:
    ```bash
    LAMASSU_DUMP_RAW=/tmp/raw.txt lamassu
+   # PowerShell: $env:LAMASSU_DUMP_RAW = "$env:TEMP\raw.txt"; lamassu
    ```
 2. **Save it as a fixture.** Real captured output beats a hand-written approximation — put it in `test/fixtures/` with a name that says what produced it, e.g. `yarn4-real-4.9.1.ndjson`.
 3. **Write the failing test first**, in `test/parse.test.ts`, asserting the fixture parses to the advisories you know it should contain.
@@ -91,7 +92,14 @@ Registry audit endpoints throttle repeated requests — expect the full run to t
 ```bash
 LAMASSU_VERIFY_RAW=test/fixtures/yarn4-real-4.9.1.ndjson \
   node scripts/verify-package-manager.mjs yarn4
+
+# PowerShell:
+#   $env:LAMASSU_VERIFY_RAW = "test/fixtures/yarn4-real-4.9.1.ndjson"
+#   node scripts/verify-package-manager.mjs yarn4
 ```
+
+The inline `NAME=value command` form above is bash/zsh. On Windows use Git Bash,
+or set the variable first as shown in the PowerShell comment.
 
 CI runs the same script across npm, Yarn 1, Yarn 4, pnpm and Bun on Linux, plus npm on Windows (see [Limitations](./README.md#limitations) for why Windows coverage is npm-only today), then asserts every package manager reached the identical set of advisories for the same project (`scripts/cross-check.mjs`). That's what backs the "works with npm, Yarn 1–4, pnpm and Bun" claim — it's re-earned on every push, not assumed.
 
@@ -100,7 +108,7 @@ CI runs the same script across npm, Yarn 1, Yarn 4, pnpm and Bun on Linux, plus 
 If `lamassu` exits `2` saying it could not recognise the output, that's the single most useful bug report this project can receive — please [open an issue with the template for it](https://github.com/ThushanMadu/lamassu/issues/new?template=unparsed-output.md). Include:
 
 - The package manager and exact version (`yarn --version`, etc.)
-- The raw output, ideally captured with `LAMASSU_DUMP_RAW=/tmp/raw.txt lamassu`
+- The raw output, ideally captured with `LAMASSU_DUMP_RAW=/tmp/raw.txt lamassu` (PowerShell: `$env:LAMASSU_DUMP_RAW = "$env:TEMP\raw.txt"; lamassu`)
 
 Raw output is what turns into a fixture and a fix — a description of the problem alone usually isn't enough to reproduce it.
 

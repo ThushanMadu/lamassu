@@ -11,7 +11,7 @@
  * pause in between rather than in parallel - parallel is faster on CI and
  * counter-productive on a home connection.
  *
- *   LAMASSU_VERIFY_GAP_MS=30000   seconds to wait between package managers
+ *   LAMASSU_VERIFY_GAP_MS=30000   milliseconds to wait between package managers
  */
 import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
@@ -31,22 +31,38 @@ const REQUIRES = {
   bun: { cmd: "bun", hint: "install with: curl -fsSL https://bun.sh/install | bash" },
 };
 
+const IS_WINDOWS = process.platform === "win32";
+
 /**
  * Tools installed outside the system prefix add themselves to an interactive
  * shell profile, which a non-interactive shell never reads - so `which bun`
  * fails on a machine where bun is perfectly well installed. Check the usual
  * install directories too before declaring a package manager missing.
  */
-const EXTRA_BIN_DIRS = [
-  join(homedir(), ".bun", "bin"),
-  join(homedir(), ".volta", "bin"),
-  "/opt/homebrew/bin",
-  "/usr/local/bin",
-];
+const EXTRA_BIN_DIRS = IS_WINDOWS
+  ? [
+      join(homedir(), ".bun", "bin"),
+      join(process.env.LOCALAPPDATA ?? join(homedir(), "AppData", "Local"), "Microsoft", "WinGet", "Links"),
+    ]
+  : [
+      join(homedir(), ".bun", "bin"),
+      join(homedir(), ".volta", "bin"),
+      "/opt/homebrew/bin",
+      "/usr/local/bin",
+    ];
+
+/** Extensions Windows appends when resolving a bare command name. */
+const WIN_EXECUTABLE_EXTS = ["", ".exe", ".cmd", ".bat"];
 
 function have(cmd) {
-  if (spawnSync("which", [cmd], { encoding: "utf8" }).status === 0) return true;
-  return EXTRA_BIN_DIRS.some((dir) => existsSync(join(dir, cmd)));
+  // `which` is POSIX-only; Windows ships `where`. Both exit 0 when the command
+  // resolves. Without this, `npm run verify` on Windows marks every package
+  // manager "skipped" and exits 0 - reporting success while verifying nothing.
+  const lookup = IS_WINDOWS ? "where" : "which";
+  if (spawnSync(lookup, [cmd], { encoding: "utf8" }).status === 0) return true;
+
+  const suffixes = IS_WINDOWS ? WIN_EXECUTABLE_EXTS : [""];
+  return EXTRA_BIN_DIRS.some((dir) => suffixes.some((ext) => existsSync(join(dir, cmd + ext))));
 }
 
 const requested = process.argv.slice(2).filter((a) => !a.startsWith("-"));
