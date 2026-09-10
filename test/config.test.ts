@@ -45,6 +45,24 @@ describe("stripJsonComments", () => {
     const input = '{"reason": "say \\"hi\\" // still a string"}';
     expect(JSON.parse(stripJsonComments(input)).reason).toBe('say "hi" // still a string');
   });
+
+  it("drops trailing commas so VS Code / audit-ci .jsonc files still parse", () => {
+    const input = `{
+      "severity": "high",
+      "allowlist": [
+        "GHSA-xxxx-xxxx-xxxx", // last item
+      ],
+    }`;
+    expect(JSON.parse(stripJsonComments(input))).toEqual({
+      severity: "high",
+      allowlist: ["GHSA-xxxx-xxxx-xxxx"],
+    });
+  });
+
+  it("does not touch a comma that only looks trailing inside a string", () => {
+    const input = '{"note": "a, b, c]"}';
+    expect(JSON.parse(stripJsonComments(input)).note).toBe("a, b, c]");
+  });
 });
 
 describe("native config", () => {
@@ -167,6 +185,31 @@ describe("audit-ci compatibility", () => {
     const notices: string[] = [];
     resolveConfig({}, dir, (m) => notices.push(m));
     expect(notices.join("\n")).toMatch(/Scope them as/);
+  });
+
+  it("flips audit-ci's `GHSA-id|package` scoped entries into lamassu order", () => {
+    const dir = projectWith({
+      "audit-ci.json": '{"high":true,"allowlist":["GHSA-35jh-r3h4-6jhm|lodash"]}',
+    });
+    // audit-ci puts the advisory first; lamassu's parseEntry reads
+    // `package|GHSA-id`, so an unflipped entry could never match.
+    expect(resolveConfig({}, dir).allowlist).toEqual(["lodash|GHSA-35jh-r3h4-6jhm"]);
+  });
+
+  it("reports audit-ci path and wildcard allowlist entries it cannot express", () => {
+    const dir = projectWith({
+      "audit-ci.json": JSON.stringify({
+        high: true,
+        allowlist: ["GHSA-35jh-r3h4-6jhm|react-scripts>svgo>nth-check", "*|@scope/pkg>*"],
+      }),
+    });
+    const notices: string[] = [];
+    const config = resolveConfig({}, dir, (m) => notices.push(m));
+    // Not silently shipped as dead entries...
+    expect(config.allowlist).toEqual([]);
+    // ...and the user is told, by name.
+    expect(notices.join("\n")).toMatch(/path or wildcard syntax/);
+    expect(notices.join("\n")).toMatch(/nth-check/);
   });
 
   it("warns about options with no equivalent instead of failing", () => {

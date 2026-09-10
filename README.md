@@ -30,15 +30,18 @@ severity threshold you set.
 - **Scoped allowlist** — suppress an advisory globally, per package, or per exact
   installed version. Entries can carry an `expires` date, and dead entries are
   reported instead of rotting silently.
-- **`audit-ci` compatible** — reads your existing `audit-ci.json` / `.jsonc`
-  unchanged. Migrating is a one-line change to your CI script.
+- **`audit-ci` compatible** — reads your existing `audit-ci.json` / `.jsonc`:
+  severity, package manager, skip-dev and bare-advisory allowlist entries carry
+  over, so migrating is a one-line change to your CI script. Path and wildcard
+  allowlist entries are reported on load (see [Migrating](#migrating-from-audit-ci)).
 - **Fails loud, never silent** — exit `2` for "couldn't audit" (missing package
   manager, unreachable registry, unrecognised output). A gate that can't run must
   not look like one that passed.
 - **Zero runtime dependencies** — a security tool you install is one you have to
   trust, so `dependencies` stays empty.
-- **CI-verified per package manager** on Linux and Windows, against a real
-  vulnerable project and a clean one, on every push — the compatibility claims
+- **CI-verified per package manager** — every push runs a real audit through
+  npm, Yarn 1, Yarn 4, pnpm and Bun on Linux, and through npm on Windows,
+  against both a vulnerable project and a clean one. The compatibility claims
   are re-earned, not assumed.
 
 ```console
@@ -121,15 +124,15 @@ around it by running an eight-year-old Yarn just to audit.
 
 |  | `audit-ci` | `lamassu` |
 |---|:---:|:---:|
-| Yarn 4 | not supported | supported |
-| Bun | not supported | supported |
-| Windows | untested | CI-verified |
+| Yarn 4 audit output | not supported ([#332](https://github.com/IBM/audit-ci/issues/332)) | supported |
+| Bun | via `bun.lockb` → `yarn.lock`, needs Yarn 1 installed | native `bun audit` |
+| Windows | not covered in CI | npm audit CI-verified |
 | Runtime dependencies | 9 | 0 |
-| Allowlist scoping | advisory id only | advisory, package, or version |
-| Dead allowlist entries | kept silently | reported; `--fail-unused` enforces |
-| Allowlist expiry dates | — | `expires` field |
-| Clean-build case tested | — | per package manager |
-| Actively maintained | no | yes |
+| Allowlist scoping | advisory id, or dependency path with `*` wildcards | advisory id, package, or installed version |
+| Unused allowlist entries | reported (`show-not-found`) | reported, and `--fail-unused` fails the build |
+| Allowlist expiry | metadata field, not enforced | `expires` — the entry fails the build once the date passes |
+| Clean-build case tested | — | per package manager, in CI |
+| Actively maintained | no ([#354](https://github.com/IBM/audit-ci/issues/354)) | yes |
 
 ## Migrating from `audit-ci`
 
@@ -147,6 +150,13 @@ lamassu: using audit-ci.jsonc in audit-ci compatibility mode
 
 Options with no lamassu equivalent (`retry-count`, `report-type`, `registry`)
 produce a note rather than an error.
+
+**Allowlist.** Bare advisory ids (`GHSA-…`) carry over unchanged. audit-ci
+writes a scoped entry as `GHSA-…|package`; lamassu writes it the other way
+round, as `package|GHSA-…`, and flips yours automatically on load. audit-ci's
+dependency-path entries (`GHSA-…|a>b>c`) and `*` wildcards have no lamassu
+equivalent — they are reported on load and must be re-written as
+`package|GHSA-…` or `package@version|GHSA-…`.
 
 ## Exit codes
 
@@ -193,7 +203,7 @@ An accepted risk should be revisited, not forgotten:
     {
       "id": "GHSA-yyyy-yyyy-yyyy",
       "module": "axios",
-      "expires": "2026-12-31",
+      "expires": "2027-06-30",
       "reason": "no upstream fix yet — tracked in JIRA-123"
     }
   ]

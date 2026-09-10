@@ -218,9 +218,9 @@ export async function main(
  * Comparing the raw strings would skip `main()` for every real install - the
  * CLI would exit 0 having audited nothing. Compare resolved real paths instead.
  */
-function isEntryPoint(entry: string): boolean {
+export function isEntryPoint(entry: string, self: string = import.meta.url): boolean {
   try {
-    return realpathSync(fileURLToPath(import.meta.url)) === realpathSync(entry);
+    return realpathSync(fileURLToPath(self)) === realpathSync(entry);
   } catch {
     return false;
   }
