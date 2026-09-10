@@ -134,7 +134,7 @@ export function translateAuditCiConfig(raw: unknown, source: string): CompatResu
           `audit-ci path or wildcard syntax bartizan cannot express ` +
           `(${unsupported.slice(0, 3).join(", ")}${unsupported.length > 3 ? ", ..." : ""}). ` +
           `Re-add them as "package|GHSA-..." or "package@version|GHSA-..." - see the ` +
-          `Migrating section of the README.`,
+          `"Replacing audit-ci" section of the README.`,
       );
     }
   }
