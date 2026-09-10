@@ -75,10 +75,28 @@ jobs:
       - run: npm run build
       - run: node scripts/verify-package-manager.mjs ${{ matrix.pm }}
 
+  # On Windows, npm/yarn/pnpm resolve to `.cmd` shims, and Node's CVE-2024-27980
+  # fix refuses to spawn those without `shell: true` - so a release must also
+  # prove an audit runs on Windows, not just Linux. Mirrors ci.yml's
+  # verify-windows job; see src/managers/run.ts's shouldUseShell() for the fix
+  # this is guarding.
+  verify-windows:
+    name: verify npm (windows-latest)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: node scripts/verify-package-manager.mjs npm
+
   publish:
     name: publish to npm
     runs-on: ubuntu-latest
-    needs: [verify, verify-package-managers]
+    needs: [verify, verify-package-managers, verify-windows]
     environment: release
     permissions:
       contents: read

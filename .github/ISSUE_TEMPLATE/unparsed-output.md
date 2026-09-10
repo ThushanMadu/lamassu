@@ -18,10 +18,20 @@ parser for it.
 
 ### Raw audit output
 
-Run the audit command directly and paste the result. Redact private package
+Easiest way to capture exactly what lamassu received:
+
+```bash
+# bash / zsh
+LAMASSU_DUMP_RAW=/tmp/raw.txt lamassu
+
+# PowerShell
+$env:LAMASSU_DUMP_RAW = "$env:TEMP\raw.txt"; lamassu
+```
+
+Or run the audit command directly and paste the result. Redact private package
 names if you need to, but please keep the structure intact.
 
-```
+```bash
 npm audit --json
 # or: yarn npm audit --json --recursive
 # or: pnpm audit --json

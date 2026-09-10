@@ -43,6 +43,30 @@ This project follows [Semantic Versioning](https://semver.org/).
 - Zero runtime dependencies.
 - CI matrix that audits a deliberately vulnerable project with every supported
   package manager, and cross-checks that they all reach the same verdict.
+- Fixed: on Windows, auditing an npm, Yarn, or pnpm project failed every time.
+  Those tools resolve to `.cmd` shims there, and Node's fix for CVE-2024-27980
+  refuses to spawn a `.cmd`/`.bat` file without a shell. No CI job had ever
+  exercised the real code path on Windows to catch it — the Windows unit-test
+  job mocked the audit call entirely, and the job that runs real audits was
+  Ubuntu-only. Fixed by using a shell only on `win32`, which is safe here since
+  every spawned argument is a fixed string literal, never user- or
+  file-controlled — no new dependency, no injection surface. CI now also runs
+  a real npm audit on `windows-latest` on every push and every release, so
+  this class of bug cannot hide again.
+- Fixed (Windows, CWE-426): the shell spawn above runs through `cmd.exe`, which
+  searches the current directory before `PATH`. Audits run with the working
+  directory set to a project lamassu does not control, so a repository shipping
+  its own `npm.cmd` / `yarn.cmd` / `pnpm.cmd` / `bun.cmd` in its root could run
+  in place of the real tool. The package manager is now resolved to an absolute
+  path against `PATH` only — never the working directory — before the spawn.
+- Fixed: **clean Yarn 4 and Bun projects exited `2`.** The "clean audit" signal
+  differs per package manager, and lamassu's clean-detection had only ever been
+  built from vulnerable fixtures. Yarn ≥ 2 emits *nothing at all* and exits 0 on
+  a clean project; Bun emits a bare `{}`. Both are now recognised as deliberate,
+  commented clean-report shapes (never a silent fallthrough — the "never pass on
+  unverifiable input" invariant is intact). CI now audits a genuinely clean
+  project with every package manager on every push, so this whole class — a gate
+  that fails the normal, should-pass case — cannot hide again.
 
 ### Notes
 

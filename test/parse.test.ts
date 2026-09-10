@@ -163,6 +163,22 @@ describe("parseAuditOutput", () => {
     it("accepts an empty advisories map", () => {
       expect(parseAuditOutput('{"advisories":{},"metadata":{}}')).toEqual([]);
     });
+
+    /**
+     * Regression: `bun audit --json` on a clean project emits a bare `{}` and
+     * exits 0. lamassu used to reject that as "could not recognise the audit
+     * output format" and exit 2 - every clean Bun CI build failed. The clean
+     * signal was only ever built from vulnerable fixtures.
+     */
+    it("accepts Bun's bare `{}` as a clean report", () => {
+      expect(parseAuditOutput(fixture("bun-clean.json"))).toEqual([]);
+      expect(parseAuditOutput("{}")).toEqual([]);
+    });
+
+    it("still rejects an empty JSON array - only a keyless object is clean", () => {
+      expect(() => parseAuditOutput("[]")).toThrow(AuditParseError);
+      expect(() => parseAuditOutput("[1,2,3]")).toThrow(AuditParseError);
+    });
   });
 
   /**

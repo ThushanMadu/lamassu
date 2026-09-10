@@ -20,24 +20,39 @@ import { execFileSync, spawnSync } from "node:child_process";
 import {
   chmodSync,
   cpSync,
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
-import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { homedir, tmpdir } from "node:os";
+import { delimiter, dirname, join } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
+
+/**
+ * On Windows, npm/yarn/pnpm/corepack resolve to `.cmd` shims, and Node's fix
+ * for CVE-2024-27980 refuses to spawn those without `shell: true` (throws
+ * EINVAL). Mirrors `shouldUseShell()` in src/managers/run.ts - this script
+ * drives the same tools from outside the product, so it needs the same fix.
+ */
+const IS_WINDOWS = process.platform === "win32";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const FIXTURE = join(ROOT, "test", "fixtures", "vulnerable-project");
+const CLEAN_FIXTURE = join(ROOT, "test", "fixtures", "clean-project");
 const CLI = join(ROOT, "dist", "cli.js");
 
 // The library itself, so policy behaviour can be checked against the captured
 // output without paying for another network round trip.
+//
+// import() requires a file:// URL for an absolute path on Windows - a raw
+// "D:\..." string trips ERR_UNSUPPORTED_ESM_URL_SCHEME because the loader
+// reads the "D:" as a protocol. pathToFileURL() is the correct conversion on
+// every platform, so it is used here even though POSIX never needed it.
 const { parseAuditOutput, atOrAbove, applyAllowlist, renderTextReport } = await import(
-  join(ROOT, "dist", "index.js")
+  pathToFileURL(join(ROOT, "dist", "index.js")).href
 );
 
 /** Direct dependencies of the fixture: every package manager must find these. */
@@ -49,7 +64,11 @@ const SETUPS = {
     install: ["npm", ["install", "--no-audit", "--no-fund", "--ignore-scripts"]],
   },
   pnpm: {
-    corepack: "pnpm@latest",
+    // Pinned, like the Yarns. `pnpm@latest` is not reproducible: pnpm 11+ ships
+    // bin/pnpm.mjs where older Corepack expects bin/pnpm.cjs, so "latest" fails
+    // on any machine whose Corepack has not been updated. A pinned version means
+    // CI and a contributor's laptop run the same thing.
+    corepack: "pnpm@10.34.5",
     install: ["pnpm", ["install", "--ignore-scripts", "--no-frozen-lockfile"]],
   },
   yarn1: {
@@ -86,6 +105,8 @@ if (!setup) {
 }
 
 const workdir = mkdtempSync(join(tmpdir(), `lamassu-verify-${target}-`));
+/** Sibling temp dirs created by the clean-project step; cleaned up at the end. */
+const cleanDirs = [];
 let failed = false;
 
 /**
@@ -103,9 +124,26 @@ function createShim(name) {
   return file;
 }
 
+/**
+ * Install locations that tools add to an interactive shell profile but which a
+ * non-interactive shell never sees. bun's installer writes ~/.bun/bin into
+ * .zshrc, so `which bun` fails here even on a machine where bun is installed.
+ */
+const EXTRA_BIN_DIRS = [
+  join(homedir(), ".bun", "bin"),
+  join(homedir(), ".volta", "bin"),
+  "/opt/homebrew/bin",
+  "/usr/local/bin",
+].filter((d) => existsSync(d));
+
 /** PATH with our shims first, so `yarn` and `pnpm` resolve through corepack. */
 function pathWithShims() {
-  return { ...process.env, PATH: `${shimDir}:${process.env.PATH}` };
+  return {
+    ...process.env,
+    // `:` on POSIX, `;` on Windows - joining with the wrong one corrupts the
+    // real PATH's own delimiters rather than merely adding an unused entry.
+    PATH: [shimDir, ...EXTRA_BIN_DIRS, process.env.PATH].filter(Boolean).join(delimiter),
+  };
 }
 
 function step(name, fn) {
@@ -148,8 +186,10 @@ function runCli(args, extraEnv = {}) {
   return { code: result.status, stdout: result.stdout ?? "", stderr: result.stderr ?? "" };
 }
 
-// Exactly ONE audit call. Registry audit endpoints are slow and throttle
-// repeated requests, so everything after this runs against the captured bytes.
+// Two audit calls per package manager: one vulnerable project, one clean
+// project. Registry audit endpoints are slow and throttle *repeated identical*
+// requests - these are distinct - and the offline policy checks below run
+// against the captured bytes rather than the network.
 const rawFile = join(workdir, "raw-audit-output.txt");
 let raw;
 let findings;
@@ -178,11 +218,21 @@ try {
     const [cmd, args] = setup.install;
     if (setup.corepack) {
       // Download the pinned version, then expose it on PATH via a shim.
-      execFileSync("corepack", ["prepare", setup.corepack, "--activate"], { stdio: "inherit" });
+      execFileSync("corepack", ["prepare", setup.corepack, "--activate"], {
+        stdio: "inherit",
+        shell: IS_WINDOWS,
+      });
       createShim(cmd);
       console.log(`   shim: ${join(shimDir, cmd)} -> corepack ${cmd}`);
     }
-    execFileSync(cmd, args, { cwd: workdir, stdio: "inherit", env: pathWithShims() });
+    execFileSync(cmd, args, {
+      cwd: workdir,
+      stdio: "inherit",
+      env: pathWithShims(),
+      // Resolve through the extended PATH rather than the parent's. `cmd` here
+      // is npm/yarn/pnpm - a `.cmd` shim on Windows - so it needs a shell there.
+      shell: IS_WINDOWS,
+    });
   });
 
   step("audit real output from this package manager (expect exit 1)", () => {
@@ -230,6 +280,54 @@ try {
     const outDir = join(ROOT, "verify-output");
     mkdirSync(outDir, { recursive: true });
     writeFileSync(join(outDir, `${target}.json`), stdout);
+  });
+
+  // The "clean" signal differs per package manager and is the case vulnerable
+  // fixtures never exercise: npm reports all-zero counts, pnpm an empty
+  // advisories map, Yarn 1 a summary line, Yarn >= 2 *nothing at all*, Bun a
+  // bare `{}`. Clean Yarn 4 and Bun builds both used to exit 2. This step is
+  // the guard: a real clean audit must exit 0.
+  step("a clean project audits to exit 0", () => {
+    if (offlineRaw) {
+      console.log("   skipped (offline)");
+      return;
+    }
+    // A sibling temp dir, not a subdir of `workdir`: Yarn Berry treats a
+    // package.json nested inside another project as a broken workspace and
+    // refuses to install.
+    const cleanDir = mkdtempSync(join(tmpdir(), `lamassu-verify-${target}-clean-`));
+    cleanDirs.push(cleanDir);
+    cpSync(CLEAN_FIXTURE, cleanDir, { recursive: true });
+    if (setup.packageManager) {
+      const manifest = join(cleanDir, "package.json");
+      const pkg = JSON.parse(readFileSync(manifest, "utf8"));
+      pkg.packageManager = setup.corepack;
+      writeFileSync(manifest, JSON.stringify(pkg, null, 2));
+    }
+    if (setup.yarnrc) writeFileSync(join(cleanDir, ".yarnrc.yml"), setup.yarnrc);
+
+    const [cmd, cmdArgs] = setup.install;
+    execFileSync(cmd, cmdArgs, {
+      cwd: cleanDir,
+      stdio: "inherit",
+      env: pathWithShims(),
+      shell: IS_WINDOWS,
+    });
+
+    const { status, stdout, stderr } = spawnSync(
+      process.execPath,
+      [CLI, "-d", cleanDir, "--severity", "low", "--output", "json"],
+      { encoding: "utf8", env: { ...pathWithShims(), NO_COLOR: "1" }, timeout: CLI_TIMEOUT_MS },
+    );
+    if (stderr.trim()) console.log(`   stderr: ${stderr.trim().split("\n")[0]}`);
+    assert(status === 0, `clean project exits 0, got ${status}`);
+    try {
+      const parsed = JSON.parse(stdout);
+      assert(parsed.passed === true, "reports passed: true");
+      assert(parsed.vulnerabilities.length === 0, "reports zero vulnerabilities");
+    } catch {
+      assert(false, "clean-audit stdout is valid JSON");
+    }
   });
 
   step("raw output is captured and parses", () => {
@@ -343,6 +441,7 @@ try {
     rmSync(workdir, { recursive: true, force: true });
   }
   rmSync(shimDir, { recursive: true, force: true });
+  for (const dir of cleanDirs) rmSync(dir, { recursive: true, force: true });
 }
 
 console.log(failed ? `\n✗ ${target} FAILED\n` : `\n✓ ${target} verified\n`);
