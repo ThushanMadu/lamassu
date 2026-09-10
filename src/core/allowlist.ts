@@ -89,9 +89,14 @@ export function applyAllowlist(
   const used = new Set<AllowlistRule>();
 
   for (const v of vulnerabilities) {
-    const rule = active.find((r) => matches(r, v));
+    // Mark *every* matching entry as used, not just the first. A broad
+    // "GHSA-x" alongside a narrow "lodash@1.2.0|GHSA-x" is a legitimate
+    // belt-and-suspenders pattern; reporting the second as unused (and failing
+    // `--fail-unused`) purely because of list order would be surprising.
+    const matching = active.filter((r) => matches(r, v));
+    for (const r of matching) used.add(r);
+    const [rule] = matching;
     if (rule) {
-      used.add(rule);
       suppressed.push({ vulnerability: v, rule });
     } else {
       remaining.push(v);

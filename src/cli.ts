@@ -1,6 +1,8 @@
 #!/usr/bin/env node
+import { realpathSync } from "node:fs";
 import { createRequire } from "node:module";
 import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { audit } from "./index.js";
 import { ConfigError, resolveConfig, type Config } from "./config.js";
 import { AuditParseError } from "./core/parse.js";
@@ -210,9 +212,22 @@ export async function main(
 /**
  * Only auto-run when this file is the process entry point, so that tests can
  * import `main` without it executing on import.
+ *
+ * npm installs the `lamassu` bin as a symlink (`node_modules/.bin/lamassu`), so
+ * `process.argv[1]` and `import.meta.url` name the same file by different paths.
+ * Comparing the raw strings would skip `main()` for every real install - the
+ * CLI would exit 0 having audited nothing. Compare resolved real paths instead.
  */
+export function isEntryPoint(entry: string, self: string = import.meta.url): boolean {
+  try {
+    return realpathSync(fileURLToPath(self)) === realpathSync(entry);
+  } catch {
+    return false;
+  }
+}
+
 const entry = process.argv[1];
-if (entry && import.meta.url === new URL(`file://${entry}`).href) {
+if (entry && isEntryPoint(entry)) {
   main().then((code) => {
     process.exitCode = code;
   });

@@ -255,6 +255,26 @@ describe("parseAuditOutput", () => {
     });
   });
 
+  it("parses a Yarn 4 --recursive map even when a package is named `metadata`", () => {
+    // `metadata` / `advisories` are real npm package names. The recursive-map
+    // detector must not mistake a package key for the marker of another shape.
+    const doc = JSON.stringify({
+      metadata: [
+        {
+          id: 1097130,
+          url: "https://github.com/advisories/GHSA-35jh-r3h4-6jhm",
+          title: "Command Injection",
+          severity: "high",
+          tree_versions: ["1.0.0"],
+        },
+      ],
+    });
+    const found = parseAuditOutput(doc);
+    expect(found).toHaveLength(1);
+    expect(found[0]!.module).toBe("metadata");
+    expect(found[0]!.id).toBe("GHSA-35JH-R3H4-6JHM");
+  });
+
   it("de-duplicates the same advisory reported under several packages", () => {
     const doc = JSON.parse(fixture("advisories-v1.json"));
     doc.advisories["9999"] = {

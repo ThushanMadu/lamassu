@@ -36,6 +36,59 @@ const IGNORED: Record<string, string> = {
   "summary-text": "",
 };
 
+const GHSA_RE = /GHSA-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{4}/i;
+
+/**
+ * audit-ci and lamassu both write a scoped allowlist entry as `left|right`, but
+ * with the sides swapped: audit-ci uses `GHSA-id|dependency>path`, lamassu uses
+ * `package|GHSA-id`. Flip the entries that map cleanly; collect the ones that
+ * do not (dependency paths, `*` wildcards, bare module names) so the caller can
+ * warn about them rather than silently shipping an entry that can never match.
+ */
+function translateAllowlist(list: unknown[]): {
+  entries: AllowlistEntry[];
+  unsupported: string[];
+  bare: number;
+} {
+  const entries: AllowlistEntry[] = [];
+  const unsupported: string[] = [];
+  let bare = 0;
+
+  for (const raw of list) {
+    if (typeof raw !== "string") {
+      entries.push(raw as AllowlistEntry);
+      continue;
+    }
+    const entry = raw.trim();
+    const pipe = entry.indexOf("|");
+
+    if (pipe === -1) {
+      if (GHSA_RE.test(entry)) {
+        entries.push(entry); // advisory anywhere - identical meaning in lamassu
+        bare++;
+      } else {
+        unsupported.push(entry); // bare module name - no lamassu equivalent
+      }
+      continue;
+    }
+
+    const left = entry.slice(0, pipe).trim();
+    const right = entry.slice(pipe + 1).trim();
+    const leftIsGhsa = GHSA_RE.test(left);
+    const rightIsGhsa = GHSA_RE.test(right);
+
+    if (rightIsGhsa && !leftIsGhsa) {
+      entries.push(entry); // already lamassu's `package|GHSA-id` order
+    } else if (leftIsGhsa && !rightIsGhsa && !/[>*]/.test(right)) {
+      entries.push(`${right}|${left}`); // audit-ci `GHSA-id|package` -> flip
+    } else {
+      unsupported.push(entry); // dependency path, wildcard, or ambiguous
+    }
+  }
+
+  return { entries, unsupported, bare };
+}
+
 /**
  * audit-ci expresses the threshold as a set of booleans - `{"moderate": true}`
  * means "fail on moderate and above". When several are set, the lowest wins,
@@ -60,14 +113,28 @@ export function translateAuditCiConfig(raw: unknown, source: string): CompatResu
   if (severity) config.severity = severity;
 
   if (Array.isArray(input.allowlist)) {
-    config.allowlist = input.allowlist as AllowlistEntry[];
-    // audit-ci matches a bare advisory id anywhere in the tree. We keep that
-    // behaviour so results do not change on migration, but say how to narrow it.
-    const bare = input.allowlist.filter((e) => typeof e === "string" && !e.includes("|")).length;
+    const { entries, unsupported, bare } = translateAllowlist(input.allowlist);
+    config.allowlist = entries;
+
+    // A bare advisory id matches that advisory in any package - audit-ci's
+    // behaviour, kept so results do not change on migration, but worth narrowing.
     if (bare > 0) {
       warnings.push(
-        `${bare} allowlist entr${bare === 1 ? "y" : "ies"} match any package. ` +
-          `Scope them as "package|GHSA-..." to avoid suppressing unrelated findings.`,
+        `${bare} allowlist entr${bare === 1 ? "y matches" : "ies match"} the advisory in any ` +
+          `package. Scope them as "package|GHSA-..." to avoid suppressing an unrelated finding later.`,
+      );
+    }
+
+    // Dependency-path and wildcard entries have no lamassu equivalent. Say so
+    // loudly: a silently-dropped suppression turns into a failing build, and a
+    // silently-kept-but-dead entry is a suppression the user thinks they have.
+    if (unsupported.length > 0) {
+      warnings.push(
+        `${unsupported.length} allowlist entr${unsupported.length === 1 ? "y uses" : "ies use"} ` +
+          `audit-ci path or wildcard syntax lamassu cannot express ` +
+          `(${unsupported.slice(0, 3).join(", ")}${unsupported.length > 3 ? ", ..." : ""}). ` +
+          `Re-add them as "package|GHSA-..." or "package@version|GHSA-..." - see the ` +
+          `Migrating section of the README.`,
       );
     }
   }

@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -17,7 +17,7 @@ vi.mock("../src/managers/run.js", async (importOriginal) => {
   };
 });
 
-const { main } = await import("../src/cli.js");
+const { main, isEntryPoint } = await import("../src/cli.js");
 const { AuditCommandError } = await import("../src/managers/run.js");
 
 const fixture = (name: string) =>
@@ -216,5 +216,36 @@ describe("help and version", () => {
     const { code, out } = await run(["--version"]);
     expect(code).toBe(0);
     expect(out.trim()).toMatch(/^\d+\.\d+\.\d+$/);
+  });
+});
+
+/**
+ * Regression: npm installs the `lamassu` bin as a symlink, so `process.argv[1]`
+ * (`node_modules/.bin/lamassu`) and the resolved module path differ. A raw
+ * string compare skipped `main()` for every real install - `npx lamassu` did
+ * nothing and exited 0. isEntryPoint() must compare real paths.
+ */
+describe("isEntryPoint", () => {
+  const links: string[] = [];
+  afterEach(() => {
+    while (links.length) rmSync(links.pop()!, { force: true });
+  });
+
+  const realCli = join(import.meta.dirname, "..", "src", "cli.ts");
+  const self = `file://${realCli}`;
+
+  it("matches a symlink that resolves to the module (the .bin/lamassu case)", () => {
+    const link = join(mkdtempSync(join(tmpdir(), "lamassu-bin-")), "lamassu");
+    symlinkSync(realCli, link);
+    links.push(link);
+    expect(isEntryPoint(link, self)).toBe(true);
+  });
+
+  it("does not match an unrelated path", () => {
+    expect(isEntryPoint(join(import.meta.dirname, "cli.test.ts"), self)).toBe(false);
+  });
+
+  it("returns false rather than throwing when the entry path does not exist", () => {
+    expect(isEntryPoint(join(tmpdir(), "does-not-exist-lamassu"), self)).toBe(false);
   });
 });
